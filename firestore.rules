@@ -1,0 +1,444 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth(){ return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+
+    function role(){
+      return exists(/databases/$(database)/documents/commerciaux/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/commerciaux/$(request.auth.uid)).data.role
+        : '';
+    }
+    function isAdmin(){ return isAuth() && role() == 'admin'; }
+    function isOneOf(roles){ return isAuth() && role() in roles; }
+    function isStaff(){ return isOneOf(['admin','commercial','secretaire','gestionnaire_stock','controleur','chef_agence','comptable']); }
+    function isComptable(){ return isOneOf(['admin','comptable']); }
+
+    // ── Agence de l'utilisateur connecté (ajouté pour /syncJournal) ──
+    // Même forme que role() ci-dessus : le garde exists() évite une erreur
+    // de règle si le document 'commerciaux' de l'utilisateur est absent.
+    function monAgence(){
+      return exists(/databases/$(database)/documents/commerciaux/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/commerciaux/$(request.auth.uid)).data.agenceId
+        : '';
+    }
+
+    // Validation de taille/type des champs côté serveur
+    function validClient() {
+      let d = request.resource.data;
+      return d.nom is string && d.nom.size() <= 100
+          && d.tel is string && d.tel.size() <= 20
+          && d.ville is string && d.ville.size() <= 80
+          && d.contrat is string && d.contrat.size() <= 1000
+          && d.codeClient is string && d.codeClient.size() <= 20
+          && d.commercialId is string;
+    }
+    function validPaiement() {
+      let d = request.resource.data;
+      return d.montant is number && d.montant >= 0 && d.montant <= 999999999
+          && d.clientId is string
+          && d.commercialId is string;
+    }
+
+    // ── VOLET 40 ── Un contrat résilié ne reçoit plus AUCUN encaissement.
+    // Doublon serveur du contrôle de l'application (_refuserSiResilie) : il
+    // couvre aussi un téléphone resté hors ligne qui ignorait la résiliation.
+    // L'admin reste exempté (import historique, corrections).
+    // Coût : 1 lecture du document client par encaissement créé.
+    // Client introuvable → autorisé (ne bloque pas un client créé hors ligne
+    // dont la création serait rejouée dans le même lot).
+    function clientNonResilie(cid){
+      let p = /databases/$(database)/documents/clients/$(cid);
+      // ── VOLET 77 ── idem pour un carnet arrêté (« Livrer & terminer ») :
+      // même lecture du document client, AUCUN coût supplémentaire.
+      return !exists(p) || (get(p).data.get('statutContrat', 'actif') != 'resilie'
+                            && get(p).data.get('carnetTermine', false) != true);
+    }
+    function encaissementAutorise(){
+      return isAdmin()
+        || !(request.resource.data.clientId is string)
+        || clientNonResilie(request.resource.data.clientId);
+    }
+
+    match /agences/{d}            { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /commerciaux/{d}        { allow read: if isStaff();
+                                    allow create: if isAdmin()
+                                      || (isAuth() && request.auth.uid==d && request.resource.data.role=='comptable');
+                                    allow delete: if isAdmin();
+                                    allow update: if isAdmin() || (isAuth() && request.auth.uid==d
+                                      && request.resource.data.role==resource.data.role
+                                      && request.resource.data.agenceId==resource.data.agenceId); }
+    match /commerciauxPrive/{d}   { allow read: if isStaff(); allow write: if isAdmin()
+                                      || (isAuth() && request.auth.uid==d); }
+    match /clients/{d}            { allow read: if isStaff();
+                                     allow create: if isOneOf(['admin','commercial','secretaire','chef_agence']) && validClient();
+                                     allow update: if (isOneOf(['admin','commercial','secretaire','chef_agence']) && validClient())
+                                       // ── VOLET 37 ── « _ts » est TOLERE ici, et c'est indispensable.
+                                       // Depuis le volet 19, fbUpdate() ajoute _ts:serverTimestamp()
+                                       // a TOUTE modification — c'est ce qui permet aux autres
+                                       // appareils de recevoir le changement (l'ecouteur ne demande
+                                       // que les documents dont _ts depasse le dernier connu).
+                                       // Les champs modifies sont donc ['controle','_ts'], et
+                                       // hasOnly(['controle']) devenait FAUX : toute mise sous
+                                       // controle par un controleur etait refusee en
+                                       // permission-denied, silencieusement du point de vue du
+                                       // compteur et du rapport.
+                                       // La restriction reste entiere : le controleur ne peut
+                                       // toujours modifier AUCUN autre champ du client.
+                                       || (isOneOf(['controleur']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['controle','_ts']));
+                                     allow delete: if isAdmin() || isOneOf(['chef_agence']); }
+    match /paliersDuree/{d}       { allow read: if isStaff(); allow write: if isAdmin(); }
+    // ── VOLET 74 (#1) ── config du verrou de visibilité des chiffres.
+    // Lecture par tout le personnel (pour connaître les pages protégées) ;
+    // écriture réservée à l'admin. Ne contient qu'une empreinte SHA-256 du code,
+    // jamais le code en clair.
+    match /appConfig/{d}          { allow read: if isStaff(); allow write: if isAdmin(); }
+    // ── VOLET 77 (#1) ── « Nouveau contrôle » : date de redémarrage du contrôle
+    // par commercial. Le contrôleur peut écrire CE document uniquement (les
+    // autres documents de appConfig restent réservés à l'admin).
+    match /appConfig/cyclesControle { allow read: if isStaff(); allow write: if isOneOf(['admin','controleur']); }
+    match /paiements/{d}          { allow read: if isStaff();
+                                     allow create: if isOneOf(['admin','commercial','secretaire','chef_agence']) && validPaiement() && encaissementAutorise();
+                                     allow update,delete: if isOneOf(['admin','chef_agence']); }
+    match /articles/{d}           { allow read: if isStaff(); allow write: if isOneOf(['admin','gestionnaire_stock','secretaire','chef_agence']); allow update,delete: if isAdmin(); }
+    match /produits/{d}           { allow read: if isStaff(); allow write: if isOneOf(['admin','gestionnaire_stock']); }
+    match /produitsPrive/{docId}  { allow read, write: if request.auth != null && get(/databases/$(database)/documents/commerciaux/$(request.auth.uid)).data.role == 'admin'; }
+    match /stockAgences/{d} { allow read: if isStaff(); allow create,update: if isOneOf(['admin','gestionnaire_stock','secretaire','chef_agence']); allow delete: if isAdmin(); }
+    match /stockMvts/{d}          { allow read: if isStaff(); allow create: if isOneOf(['admin','gestionnaire_stock','secretaire','chef_agence']); allow update,delete: if isAdmin(); }
+    match /livraisons/{d}         { allow read: if isStaff(); allow create,update: if isOneOf(['admin','chef_agence','secretaire']); allow delete: if isAdmin(); }
+// ── VOLET 43 ── Demandes de livraison CLIENT faites par les agents.
+    //  - création : l'agent pour lui-même uniquement (commercialId == son uid),
+    //    statut initial 'en_attente' ; ou admin / chef d'agence / secrétaire ;
+    //  - traitement (traitee / refusee) : admin, chef d'agence, secrétaire ;
+    //  - l'agent ne peut qu'ANNULER sa propre demande encore en attente,
+    //    sans toucher à aucun autre champ ('_ts' toléré : ajouté par fbUpdate) ;
+    //  - suppression : admin.
+    match /demandesLivraisonClient/{d} {
+      allow read: if isStaff();
+      allow create: if request.resource.data.statut == 'en_attente'
+        && request.resource.data.clientId is string
+        && (isOneOf(['admin','chef_agence','secretaire'])
+            || (isOneOf(['commercial']) && request.resource.data.commercialId == request.auth.uid));
+      allow update: if isOneOf(['admin','chef_agence','secretaire'])
+        || (isOneOf(['commercial'])
+            && resource.data.commercialId == request.auth.uid
+            && resource.data.statut == 'en_attente'
+            && request.resource.data.statut == 'annulee'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut','annuleLe','_ts']));
+      allow delete: if isAdmin();
+    }
+match /demandesLivraison/{d}  { allow read: if isStaff(); allow create,update: if isOneOf(['admin','chef_agence','gestionnaire_stock']); allow delete: if isAdmin(); }
+    match /adhesionPays/{d}       { allow read: if isStaff(); allow create: if isOneOf(['admin','commercial','secretaire','chef_agence']) && encaissementAutorise(); allow update,delete: if isAdmin(); }
+    match /rachatCarnetPays/{d}   { allow read: if isStaff(); allow create: if isOneOf(['admin','secretaire','chef_agence']) && encaissementAutorise(); allow update: if isOneOf(['admin','secretaire','chef_agence']); allow delete: if isAdmin(); }
+    // ── VOLET 18 ── Décompte des carnets remis aux commerciaux.
+    //   qty > 0 = attribution (admin / chef d'agence)
+    //   qty < 0 = consommation (création d'un client, rachat de carnet)
+    // LECTURE : admin, chef d'agence et contrôleur — c'est le périmètre
+    // demandé. Tout membre du personnel peut en outre lire SES PROPRES
+    // mouvements : c'est ce qui permet d'avertir un commercial qu'il n'a
+    // plus de carnet au moment où il crée un client.
+    //   ⚠️ Une requête ne passe que si elle est prouvablement sûre. La lecture
+    //   « ses propres mouvements » n'est donc possible qu'avec un
+    //   where('commercialId','==', son uid) — c'est exactement ce que fait
+    //   _carnetSoldeCommercial(). Pour une secrétaire créant un client au nom
+    //   d'un tiers, la lecture est refusée : l'avertissement de solde ne
+    //   s'affiche pas, l'enregistrement se fait quand même.
+    // ÉCRITURE : une attribution (quantité libre) est réservée à l'admin et au
+    // chef d'agence ; une consommation est limitée à -1 exactement, ce qui
+    // empêche un commercial de se créditer des carnets.
+    // Le journal est en AJOUT SEUL pour tous sauf l'admin : une ligne de
+    // consommation ne peut pas être effacée par celui qui l'a produite.
+    match /carnetMvts/{d}         { allow read: if isOneOf(['admin','chef_agence','controleur'])
+                                      || (isStaff() && resource.data.commercialId == request.auth.uid);
+                                    allow create: if isStaff()
+                                      && request.resource.data.saisiParId == request.auth.uid
+                                      && request.resource.data.qty is number
+                                      && request.resource.data.qty != 0
+                                      && request.resource.data.commercialId is string
+                                      && (
+                                           (isOneOf(['admin','chef_agence'])
+                                            && request.resource.data.qty >= -1000
+                                            && request.resource.data.qty <= 1000)
+                                           || request.resource.data.qty == -1
+                                         );
+                                    allow update, delete: if isAdmin(); }
+    // ── VOLET 38 ── JOURNAL D'AUDIT : AJOUT SEUL, JAMAIS DE RETOUR EN ARRIERE.
+    // AVANT : « allow update, delete: if isAdmin() ». Un administrateur
+    // pouvait donc effacer la trace de ses propres suppressions — ce qui
+    // privait le journal de toute valeur probante au moment precis ou on en
+    // aurait eu besoin.
+    // DESORMAIS : creation uniquement, et seulement en son propre nom.
+    // Personne ne peut plus modifier ni supprimer une entree, pas meme
+    // l'administrateur, pas meme depuis la console d'administration de
+    // l'application. (Un proprietaire du projet Firebase garde evidemment la
+    // main via la console Google Cloud : aucune regle Firestore ne protege de
+    // cela, et pretendre le contraire serait faux.)
+    // ── VOLET 52 ── Rouleaux de papier thermique attribués (admin, chef d'agence).
+    //  - lecture : admin et chef d'agence ;
+    //  - création : en son propre nom (saisiParId) ; le chef d'agence ne peut
+    //    qu'ATTRIBUER (qty > 0, 500 max) à une personne de SON agence ; l'admin
+    //    peut aussi saisir une correction négative ;
+    //  - modification : admin ; suppression : admin (tracée au journal d'audit).
+    match /rouleauxMvts/{d} {
+      allow read: if isOneOf(['admin','chef_agence']);
+      allow create: if isOneOf(['admin','chef_agence'])
+        && request.resource.data.saisiParId == request.auth.uid
+        && request.resource.data.commercialId is string
+        && request.resource.data.qty is number
+        && request.resource.data.recusParRouleau is number
+        && request.resource.data.recusParRouleau >= 1
+        && (isAdmin()
+            || (request.resource.data.qty > 0 && request.resource.data.qty <= 500
+                && request.resource.data.agenceId == monAgence()));
+      allow update, delete: if isAdmin();
+    }
+    // ── VOLET 58 ── historique des changements d'e-mail : écrit UNIQUEMENT par
+    // la Cloud Function adminChangerEmail (Admin SDK, hors règles). Aucun
+    // client ne peut y écrire ; seul l'admin peut le lire.
+    match /changementsEmail/{d}   { allow read: if isAdmin(); allow write: if false; }
+    match /auditLog/{d}           { allow read: if isAdmin();
+                                    // ── VOLET 38 ── 'secretaire' et 'gestionnaire_stock' ajoutes :
+                                    // ils peuvent supprimer (livraisons / produits), donc ils
+                                    // DOIVENT pouvoir journaliser. Sans ce droit, leur
+                                    // suppression serait soit bloquee, soit non tracee.
+                                    // « effectuePar == request.auth.uid » reste exige : personne
+                                    // ne peut journaliser au nom d'un autre.
+                                    allow create: if isOneOf(['admin','chef_agence','secretaire','gestionnaire_stock'])
+                                      && request.resource.data.effectuePar == request.auth.uid;
+                                    allow update, delete: if false; }
+    match /mises/{d}              { allow read: if isStaff(); allow create: if isOneOf(['admin','commercial','secretaire']); allow update,delete: if isAdmin(); }
+    match /versements/{d}         { allow read: if isStaff(); allow create,update: if isOneOf(['admin','secretaire']); allow delete: if isAdmin(); }
+    match /primesPaliers/{d}      { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /pointsJour/{d}         { allow read: if isStaff(); allow write: if isOneOf(['admin','commercial','secretaire']); }
+    match /transferts/{d}         { allow read: if isStaff(); allow create: if isOneOf(['admin','secretaire','chef_agence']); allow update,delete: if isAdmin(); }
+    match /charges/{d}             { allow read: if isStaff(); allow write: if isComptable(); }
+    match /salaires/{d}            { allow read: if isStaff(); allow write: if isComptable(); }
+    match /periodesVerrouillees/{d}{ allow read: if isStaff(); allow write: if isComptable(); }
+
+    match /depenses/{d}            { allow read: if isStaff();
+                                      allow create,update: if isOneOf(['admin','chef_agence']);
+                                      allow delete: if isAdmin(); }
+
+    match /recus/{d}               { allow read: if isStaff();
+                                      allow create: if isOneOf(['admin','commercial','secretaire','chef_agence']);
+                                      allow update,delete: if isAdmin(); }
+
+    // ── Journal de synchronisation : saisies passées de « en attente » à
+    //    « transmise » via la file hors-ligne (voir _SYNC_JOURNAL_COLS).
+    //
+    //    LECTURE réservée à l'admin et au chef d'agence (_SYNC_JOURNAL_ROLES).
+    //    Volontairement PAS isStaff() : ce journal expose l'activité de tous
+    //    les commerciaux, ce n'est pas une donnée de travail ordinaire.
+    //
+    //    ⚠️ Firestore ne filtre pas les résultats selon les règles : il rejette
+    //    la requête entière s'il ne peut pas garantir d'avance que tout sera
+    //    autorisé. La requête du chef d'agence porte donc elle-même
+    //    where('agenceId','==',...) — c'est déjà le cas dans l'application.
+    //    L'admin interroge sans contrainte d'agence : sa règle est donc
+    //    inconditionnelle.
+    match /syncJournal/{d}         { allow read: if isAdmin()
+                                       || (isOneOf(['chef_agence']) && resource.data.agenceId == monAgence());
+                                     // Écrit par l'appareil qui vient de transmettre une saisie
+                                     // restée en file hors-ligne. saisiParId == uid : ces lignes
+                                     // sont créées par addDoc() DIRECT, donc sans le contrôle de
+                                     // rôle côté client — sans ce garde-fou, un compte pourrait
+                                     // écrire au nom d'un autre commercial.
+                                     allow create: if isOneOf(['admin','commercial','secretaire','chef_agence'])
+                                       && request.resource.data.saisiParId == request.auth.uid
+                                       && request.resource.data.col in ['paiements','adhesionPays','rachatCarnetPays'];
+                                     // Journal en AJOUT SEUL : une ligne de retard ne peut pas
+                                     // être effacée après coup depuis l'application.
+                                     allow update,delete: if false; }
+
+  function estParticipant(convId){
+      return convId.split('__').hasAny([request.auth.uid]);
+    }
+    match /chatConversations/{convId} {
+      // ✅ Supervision admin : l'admin peut lire TOUTES les conversations,
+      // pas seulement celles où il participe (demande explicite : voir tous
+      // les échanges entre tous les utilisateurs).
+      // ── VOLET 44 ── CAUSE PROBABLE du chat « muet » chez les non-admins :
+      // la liste des conversations est chargée par une REQUÊTE
+      // where('participants','array-contains', uid). Or estParticipant(convId)
+      // dépend de l'IDENTIFIANT du document, que Firestore ne peut pas
+      // vérifier à partir des filtres d'une requête : la requête entière est
+      // alors refusée (permission-denied), en silence côté application.
+      // On ajoute la même condition exprimée sur le CHAMP 'participants',
+      // que la requête array-contains permet de prouver. Rien n'est élargi :
+      // il faut toujours figurer parmi les participants.
+      allow read:   if isAuth() && (
+                      (resource.data.participants is list && request.auth.uid in resource.data.participants)
+                      || estParticipant(convId)
+                      || isAdmin());
+      allow create: if isAuth() && estParticipant(convId)
+                      && request.resource.data.participants is list
+                      && request.resource.data.participants.size() == 2
+                      && request.resource.data.participants.hasAll([request.auth.uid]);
+      // ✅ L'admin peut marquer une conversation comme "vue" (adminSeenAt)
+      // même s'il n'y participe pas, mais NE PEUT PAS modifier autre chose
+      // (participants, messages, noms...) sur une conversation qui n'est
+      // pas la sienne — seul le champ adminSeenAt est autorisé dans ce cas.
+      allow update: if isAuth() && (
+                      estParticipant(convId)
+                      || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminSeenAt']))
+                    );
+    }
+    match /chatMessages/{id} {
+           // ✅ Supervision admin : lecture de tous les messages, pas seulement
+           // ceux des conversations où l'admin participe.
+           allow read:   if isAuth() && (estParticipant(resource.data.conversationId) || isAdmin());
+           // FIX ANTI-SPAM : taille du texte limitée côté serveur (empêche un flood de
+           // messages géants qui gonflerait la facture Firestore et saturerait l'UI).
+           // Trois types de message autorisés : 'texte' (contenu écrit), 'image'
+           // (photo envoyée via Firebase Storage, imageUrl = URL de téléchargement)
+           // et 'recu' (référence à un reçu envoyé depuis l'historique des reçus).
+           allow create: if isAuth() && estParticipant(request.resource.data.conversationId)
+                           && request.resource.data.authorId == request.auth.uid
+                           && (
+                             (request.resource.data.type == 'texte'
+                               && request.resource.data.texte is string
+                               && request.resource.data.texte.size() > 0
+                               && request.resource.data.texte.size() <= 4000)
+                             ||
+                             (request.resource.data.type == 'image'
+                               && request.resource.data.imageUrl is string
+                               && request.resource.data.imageUrl.size() > 0
+                               && request.resource.data.imageUrl.size() <= 600
+                               && request.resource.data.imageUrl.matches('https://.*'))
+                             ||
+                             // 'recu' : envoi d'un reçu (historique des reçus) au commercial
+                             // concerné — le message ne contient qu'une référence (recuId),
+                             // l'ouverture/impression relit le document /recus/{recuId} à la
+                             // demande (règle de lecture : isStaff(), collection /recus).
+                             (request.resource.data.type == 'recu'
+                               && request.resource.data.recuId is string
+                               && request.resource.data.recuId.size() > 0
+                               && request.resource.data.texte is string
+                               && request.resource.data.texte.size() <= 4000)
+                           );                      
+      allow update: if false;
+      allow delete: if isAdmin() || (isAuth() && resource.data.authorId == request.auth.uid);
+    }
+    match /chatTyping/{convId} {
+      allow read:  if isAuth() && (estParticipant(convId) || isAdmin());
+      allow write: if isAuth() && estParticipant(convId);
+    }
+
+    // ── VOLET 59 ── Jetons de notification push (un document par appareil,
+    // ID = jeton FCM). Écrits par app.js, LUS UNIQUEMENT par la Cloud
+    // Function notifierNouveauMessage (Admin SDK, qui ignore ces règles).
+    // - Personne ne peut lire les jetons depuis le navigateur.
+    // - On ne peut enregistrer un jeton QUE pour soi-même (uid == son UID).
+    // - Champs strictement limités ; pas de champ libre.
+    // - Mise à jour autorisée même si le jeton appartenait à un autre UID :
+    //   c'est le cas d'un téléphone partagé, où le jeton de l'appareil passe
+    //   au nouvel utilisateur connecté (le jeton n'est connu que de l'appareil).
+    match /pushTokens/{tokenId} {
+      allow read: if false;
+      allow create, update: if isAuth()
+                    && tokenId.size() <= 512
+                    && request.resource.data.keys().hasOnly(['uid','ua','appVersion','updatedAt'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.ua is string && request.resource.data.ua.size() <= 200
+                    && request.resource.data.appVersion is string && request.resource.data.appVersion.size() <= 20
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if isAuth() && resource.data.uid == request.auth.uid;
+    }
+
+    match /loginAttempts/{emailKey} {
+      allow get: if true;
+      allow create: if request.resource.data.count == 1
+                    && request.resource.data.keys().hasOnly(['count','windowStart']);
+      allow update: if request.resource.data.keys().hasOnly(['count','windowStart']) && (
+                      (request.resource.data.count == resource.data.count + 1
+                       && request.resource.data.windowStart == resource.data.windowStart)
+                      ||
+                      (request.resource.data.count == 0)
+                      ||
+                      (request.resource.data.count == 1)
+                    );
+      allow delete: if isAdmin();
+    }
+    function validLogErreur() {
+  let d = request.resource.data;
+  // ── VOLET 39 ── 'appVersion' ajoute : sans lui, une erreur remontee du
+  // terrain n'est rattachable a aucun lot. hasOnly() accepte un SOUS-ensemble,
+  // donc les traces ecrites avant ce volet (sans ce champ) restent valides.
+  return d.keys().hasOnly(['type','message','stack','page','commercialId','commercialNom','userAgent','deviceMemoryGo','online','appVersion','createdAt'])
+      && d.type in ['error','unhandledrejection']
+      && d.message is string && d.message.size() <= 500
+      && d.stack is string && d.stack.size() <= 1000
+      && d.page is string && d.page.size() <= 100
+      && d.userAgent is string && d.userAgent.size() <= 300
+      && (d.commercialId == null || (d.commercialId is string && d.commercialId == request.auth.uid))
+      && (d.commercialNom == null || (d.commercialNom is string && d.commercialNom.size() <= 100))
+      && (d.deviceMemoryGo == null || d.deviceMemoryGo is number)
+      && d.online is bool
+      && d.createdAt == request.time;
+}
+match /logs_erreurs_app/{d} {
+  allow read: if isAdmin();
+  allow create: if isAuth() && validLogErreur();
+  allow update: if false;
+  allow delete: if isAdmin();
+}
+
+    // ══════════ APPLICATION DE STOCK (collections stk_*) ══════════
+    // Accès : admin + gestionnaire de stock uniquement.
+    function isStock(){ return isOneOf(['admin','gestionnaire_stock']); }
+
+    // Stock d'un couple agence/article. Jamais supprimé.
+    match /stk_stock/{id} {
+      allow read: if isStock();
+      allow create, update: if isStock()
+        && request.resource.data.agenceId is string
+        && request.resource.data.articleId is string
+        && id == request.resource.data.agenceId + '__' + request.resource.data.articleId
+        && request.resource.data.qty is number;
+      allow delete: if false;
+    }
+    // Réglages par article (prix d'achat, seuil).
+    match /stk_articles/{id} {
+      allow read: if isStock();
+      allow create, update: if isStock();
+      allow delete: if isAdmin();
+    }
+    // Journal des mouvements : on ajoute, on ne modifie ni ne supprime JAMAIS.
+    match /stk_mouvements/{id} {
+      allow read: if isStock();
+      allow create: if isStock()
+        && request.resource.data.type in ['entree','transfert','livraison','inventaire','reintegration']
+        && request.resource.data.articleId is string
+        && request.resource.data.agenceId is string
+        && request.resource.data.qty is number
+        && request.resource.data.date is string
+        && request.resource.data.auteurId == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // Inventaires : modifiables tant qu'ils ne sont pas validés.
+    match /stk_inventaires/{id} {
+      allow read: if isStock();
+      allow create: if isStock() && request.resource.data.statut == 'brouillon';
+      allow update: if isStock() && resource.data.statut != 'valide';
+      allow delete: if isAdmin() && resource.data.statut != 'valide';
+    }
+    // Une fiche par livraison TMMB traitée (empêche de déduire deux fois).
+    match /stk_livTraitees/{id} {
+      allow read: if isStock();
+      allow create, update: if isStock();
+      allow delete: if isAdmin();
+    }
+    // Jour J : administrateur seulement.
+    match /stk_config/reglages {
+      allow read: if isStock();
+      allow write: if isAdmin();
+    }
+    // Position de la dernière lecture des livraisons.
+    match /stk_config/curseurLivraisons {
+      allow read: if isStock();
+      allow write: if isStock();
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

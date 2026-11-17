@@ -1,0 +1,29 @@
+/* ═══════════════════════════════════════════════════
+   STOCK — compléments au style de la comptabilité (style.css inchangé)
+═══════════════════════════════════════════════════ */
+#toast.t-warn{border-color:rgba(251,146,60,0.4);color:var(--warn);}
+
+/* Lignes de saisie (entrées, transferts) */
+table.lignes{width:100%;border-collapse:collapse;margin-top:6px;}
+table.lignes th{text-align:left;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;padding:6px 8px;border-bottom:1px solid var(--border);}
+table.lignes td{padding:6px 8px;border-bottom:1px solid rgba(35,45,69,0.5);vertical-align:middle;}
+table.lignes .form-control{width:100%;font-size:13px;}
+table.lignes td.num{white-space:nowrap;font-weight:600;}
+
+/* Saisie d'inventaire */
+.inv-input{width:110px;padding:6px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;}
+.inv-input:focus{outline:none;border-color:var(--accent);}
+.ecart-pos{color:var(--accent2);font-weight:700;}
+.ecart-neg{color:var(--red);font-weight:700;}
+.qte-bas{color:var(--red);font-weight:700;}
+.qte-neg{color:var(--red);font-weight:800;}
+.st-total td{font-weight:800;background:#0e1427;}
+.muted{color:var(--muted);font-size:11px;}
+.tag-sm{font-size:10px;padding:2px 7px;}
+
+@media(max-width:860px){
+  table.lignes thead{display:none;}
+  table.lignes tr{display:block;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;padding:6px;}
+  table.lignes td{display:block;border:none;padding:4px;}
+  .form-row-3{grid-template-columns:1fr;}
+}

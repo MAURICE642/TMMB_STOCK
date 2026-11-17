@@ -1,0 +1,75 @@
+RÈGLES FIRESTORE — APPLICATION DE STOCK
+=======================================
+À AJOUTER dans firestore.rules (projet triomphant-v2), à l'intérieur de
+« match /databases/{database}/documents { ... } », JUSTE AVANT la dernière règle
+« match /{document=**} { allow read, write: if false; } ».
+Elles utilisent les fonctions déjà présentes : isOneOf() et isAdmin().
+Elles ne changent RIEN aux collections de TMMB.
+
+Le fichier firestore.rules fourni dans ce zip est votre fichier v77/v78
+avec ce bloc déjà inséré : vous pouvez l'utiliser directement.
+
+    // ══════════ APPLICATION DE STOCK (collections stk_*) ══════════
+    // Accès : admin + gestionnaire de stock uniquement.
+    function isStock(){ return isOneOf(['admin','gestionnaire_stock']); }
+
+    // Stock d'un couple agence/article. Jamais supprimé.
+    match /stk_stock/{id} {
+      allow read: if isStock();
+      allow create, update: if isStock()
+        && request.resource.data.agenceId is string
+        && request.resource.data.articleId is string
+        && id == request.resource.data.agenceId + '__' + request.resource.data.articleId
+        && request.resource.data.qty is number;
+      allow delete: if false;
+    }
+    // Réglages par article (prix d'achat, seuil).
+    match /stk_articles/{id} {
+      allow read: if isStock();
+      allow create, update: if isStock();
+      allow delete: if isAdmin();
+    }
+    // Journal des mouvements : on ajoute, on ne modifie ni ne supprime JAMAIS.
+    match /stk_mouvements/{id} {
+      allow read: if isStock();
+      allow create: if isStock()
+        && request.resource.data.type in ['entree','transfert','livraison','inventaire','reintegration']
+        && request.resource.data.articleId is string
+        && request.resource.data.agenceId is string
+        && request.resource.data.qty is number
+        && request.resource.data.date is string
+        && request.resource.data.auteurId == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // Inventaires : modifiables tant qu'ils ne sont pas validés.
+    match /stk_inventaires/{id} {
+      allow read: if isStock();
+      allow create: if isStock() && request.resource.data.statut == 'brouillon';
+      allow update: if isStock() && resource.data.statut != 'valide';
+      allow delete: if isAdmin() && resource.data.statut != 'valide';
+    }
+    // Une fiche par livraison TMMB traitée (empêche de déduire deux fois).
+    match /stk_livTraitees/{id} {
+      allow read: if isStock();
+      allow create, update: if isStock();
+      allow delete: if isAdmin();
+    }
+    // Jour J : administrateur seulement.
+    match /stk_config/reglages {
+      allow read: if isStock();
+      allow write: if isAdmin();
+    }
+    // Position de la dernière lecture des livraisons.
+    match /stk_config/curseurLivraisons {
+      allow read: if isStock();
+      allow write: if isStock();
+    }
+
+Puis : firebase deploy --only firestore:rules
+(ou console Firebase > Firestore Database > Règles > coller > Publier).
+
+À SAVOIR
+- Le gestionnaire de stock lit déjà articles, agences, commerciaux, produits,
+  livraisons et clients dans TMMB (il fait partie de isStaff()). Rien à changer.
+- La connexion utilise la collection loginAttempts, déjà autorisée pour TMMB
+  et la comptabilité.

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRIOMPHANT — Stock</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#07090f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TMMB Stock">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="stock.css">
+</head>
+<body>
+
+<!-- ═══════════ CONNEXION ═══════════ -->
+<div class="auth-overlay" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">TRIOMPHANT — Stock</div>
+    <div class="auth-tagline">Accès réservé · Administrateur et gestionnaire de stock</div>
+    <div class="auth-section active" id="section-login">
+      <div class="auth-label">Email</div>
+      <input class="auth-input" id="login-email" type="email" placeholder="votre@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')doLogin()">
+      <div class="auth-label">Mot de passe</div>
+      <input class="auth-input" id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="btn-auth" onclick="doLogin()">🔓 Se connecter</button>
+      <div class="auth-err" id="login-err"></div>
+    </div>
+    <div style="margin-top:18px;padding:12px 14px;background:rgba(249,200,70,0.06);border:1px solid rgba(249,200,70,0.15);border-radius:8px;font-size:11px;color:var(--muted);">
+      🔐 Utilisez votre compte TMMB. Seuls les rôles <b>admin</b> et <b>gestionnaire de stock</b> ont accès.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CHARGEMENT ═══════════ -->
+<div class="loading-overlay hidden" id="loading-screen">
+  <div class="spin"></div>
+  <div class="load-text" id="load-text">Chargement…</div>
+  <div class="sync-bar"><div class="sync-fill"></div></div>
+</div>
+
+<!-- ═══════════ APPLICATION ═══════════ -->
+<div id="app" class="hidden">
+  <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
+
+  <div id="sidebar">
+    <div class="logo-area">
+      <div class="logo-name">TRIOMPHANT</div>
+      <div class="logo-sub">Module Stock</div>
+      <div class="logo-badge">📦 STOCK</div>
+    </div>
+
+    <div class="nav-section">Suivi</div>
+    <div class="nav-item active" id="nav-dashboard" onclick="go('dashboard')">📊 Vue d'ensemble</div>
+    <div class="nav-item" id="nav-stock" onclick="go('stock')">📦 Stock par agence</div>
+    <div class="nav-item" id="nav-articles" onclick="go('articles')">🏷️ Articles</div>
+
+    <div class="nav-section">Opérations</div>
+    <div class="nav-item" id="nav-entrees" onclick="go('entrees')">📥 Entrées fournisseurs</div>
+    <div class="nav-item" id="nav-transferts" onclick="go('transferts')">🔁 Transferts</div>
+    <div class="nav-item" id="nav-inventaires" onclick="go('inventaires')">📋 Inventaires</div>
+
+    <div class="nav-section">Contrôle</div>
+    <div class="nav-item" id="nav-livraisons" onclick="go('livraisons')">🚚 Livraisons TMMB <span class="badge" id="badge-averifier" style="display:none;"></span></div>
+    <div class="nav-item" id="nav-mouvements" onclick="go('mouvements')">📑 Mouvements & rapports</div>
+
+    <div class="nav-section" id="nav-section-admin" style="display:none;">Administration</div>
+    <div class="nav-item" id="nav-reglages" onclick="go('reglages')" style="display:none;">⚙️ Réglages</div>
+
+    <div class="sidebar-footer">
+      <div class="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Connecté</span></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px;" id="last-sync-label">—</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div class="topbar">
+      <button class="mobile-menu-btn no-print" onclick="toggleMobileSidebar()" aria-label="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="topbar-title" id="topbar-title">Vue d'ensemble</div>
+      <div class="topbar-right">
+        <span class="tag tag-blue" id="topbar-jourj">Jour J : —</span>
+        <div class="user-badge" onclick="doLogout()" title="Cliquer pour se déconnecter">
+          <div class="user-avatar avatar-admin" id="user-avatar">?</div>
+          <span id="user-badge-name">—</span>
+        </div>
+        <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">🖨️ Imprimer</button>
+        <button class="btn btn-ghost btn-sm no-print" onclick="syncNow()">🔄 Actualiser</button>
+      </div>
+    </div>
+
+    <div id="content">
+
+      <!-- ════════ VUE D'ENSEMBLE ════════ -->
+      <div class="page active" id="page-dashboard">
+        <div id="dash-alerte-config"></div>
+        <div class="kpi-row kpi-4" id="dash-kpi"></div>
+        <div class="g2">
+          <div class="card">
+            <div class="card-title">⚠️ Stock bas (sous le seuil)</div>
+            <div id="dash-bas"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">🏢 Valeur du stock par agence</div>
+            <div id="dash-agences"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🚚 Dernière lecture des livraisons TMMB</div>
+          <div id="dash-liv"></div>
+        </div>
+      </div>
+
+      <!-- ════════ STOCK PAR AGENCE ════════ -->
+      <div class="page" id="page-stock">
+        <div class="filters">
+          <select class="form-control" id="st-agence" onchange="renderStock()" style="font-size:12px;"></select>
+          <input type="text" class="form-control" id="st-search" placeholder="Rechercher un article…" style="font-size:12px;" oninput="renderStock()">
+          <label class="chk-tout"><input type="checkbox" id="st-bas" onchange="renderStock()"> Seulement le stock bas</label>
+          <button class="btn btn-ghost btn-sm no-print" onclick="exportStockCsv()">⬇️ CSV</button>
+        </div>
+        <div class="kpi-row kpi-3" id="st-kpi"></div>
+        <div class="tw"><table>
+          <thead id="st-head"></thead>
+          <tbody id="st-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ════════ ARTICLES ════════ -->
+      <div class="page" id="page-articles">
+        <div class="alert alert-info">La liste des articles vient de TMMB (lecture seule). Ici, vous réglez seulement le <b>prix d'achat</b> et le <b>seuil d'alerte</b> propres à la gestion de stock.</div>
+        <div class="filters">
+          <input type="text" class="form-control" id="art-search" placeholder="Rechercher…" style="font-size:12px;" oninput="renderArticles()">
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>Réf.</th><th>Article</th><th>Catégorie</th><th>Unité</th><th>Prix d'achat</th><th>Seuil d'alerte</th><th>Stock total</th><th class="no-print"></th></tr></thead>
+          <tbody id="art-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ════════ ENTRÉES ════════ -->
+      <div class="page" id="page-entrees">
+        <div class="card no-print">
+          <div class="card-title">📥 Nouvelle entrée fournisseur</div>
+          <div class="form-row-3">
+            <div class="form-group"><div class="form-label">Agence qui reçoit *</div><select class="form-control" id="en-agence"></select></div>
+            <div class="form-group"><div class="form-label">Date *</div><input type="date" class="form-control" id="en-date"></div>
+            <div class="form-group"><div class="form-label">Fournisseur *</div><input type="text" class="form-control" id="en-fournisseur" maxlength="100" placeholder="Nom du fournisseur"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><div class="form-label">N° facture / bon</div><input type="text" class="form-control" id="en-ref" maxlength="60"></div>
+            <div class="form-group"><div class="form-label">Note</div><input type="text" class="form-control" id="en-note" maxlength="200"></div>
+          </div>
+          <table class="lignes"><thead><tr><th>Article</th><th>Quantité</th><th>Prix d'achat unitaire (FCFA)</th><th>Total</th><th></th></tr></thead><tbody id="en-lignes"></tbody></table>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn btn-ghost btn-sm" onclick="ajouterLigne('en')">+ Ajouter un article</button>
+            <div style="flex:1;text-align:right;font-weight:700;" id="en-total"></div>
+            <button class="btn btn-success" id="btn-en" onclick="enregistrerEntree()">✅ Enregistrer l'entrée</button>
+          </div>
+        </div>
+        <div class="card"><div class="card-title">🧾 Dernières entrées</div><div id="en-histo"></div></div>
+      </div>
+
+      <!-- ════════ TRANSFERTS ════════ -->
+      <div class="page" id="page-transferts">
+        <div class="card no-print">
+          <div class="card-title">🔁 Nouveau transfert entre agences</div>
+          <div class="form-row-3">
+            <div class="form-group"><div class="form-label">Agence de départ *</div><select class="form-control" id="tr-source" onchange="majLignesTransfert()"></select></div>
+            <div class="form-group"><div class="form-label">Agence d'arrivée *</div><select class="form-control" id="tr-dest"></select></div>
+            <div class="form-group"><div class="form-label">Date *</div><input type="date" class="form-control" id="tr-date"></div>
+          </div>
+          <div class="form-group"><div class="form-label">Note</div><input type="text" class="form-control" id="tr-note" maxlength="200"></div>
+          <table class="lignes"><thead><tr><th>Article</th><th>Disponible au départ</th><th>Quantité</th><th></th></tr></thead><tbody id="tr-lignes"></tbody></table>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn btn-ghost btn-sm" onclick="ajouterLigne('tr')">+ Ajouter un article</button>
+            <div style="flex:1;"></div>
+            <button class="btn btn-success" id="btn-tr" onclick="enregistrerTransfert()">✅ Enregistrer le transfert</button>
+          </div>
+        </div>
+        <div class="card"><div class="card-title">🧾 Derniers transferts</div><div id="tr-histo"></div></div>
+      </div>
+
+      <!-- ════════ INVENTAIRES ════════ -->
+      <div class="page" id="page-inventaires">
+        <div id="inv-liste">
+          <div class="sec-hdr">
+            <div class="sec-title">Inventaires</div>
+            <div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <select class="form-control" id="inv-new-agence" style="font-size:12px;"></select>
+              <button class="btn btn-primary btn-sm" onclick="nouvelInventaire()">+ Nouvel inventaire</button>
+            </div>
+          </div>
+          <div class="alert alert-info">Le <b>premier inventaire</b> de chaque agence est l'<b>inventaire de départ</b> : il fixe le stock réel compté. Les suivants comparent le stock théorique au stock compté et corrigent les écarts.</div>
+          <div class="tw"><table>
+            <thead><tr><th>Date</th><th>Agence</th><th>Type</th><th>Statut</th><th>Articles comptés</th><th>Écarts</th><th>Par</th><th class="no-print"></th></tr></thead>
+            <tbody id="inv-body"></tbody>
+          </table></div>
+        </div>
+        <div id="inv-saisie" style="display:none;">
+          <div class="sec-hdr">
+            <div class="sec-title" id="inv-titre">Inventaire</div>
+            <button class="btn btn-ghost btn-sm no-print" onclick="fermerInventaire()">← Retour à la liste</button>
+          </div>
+          <div class="alert alert-warn" id="inv-aide"></div>
+          <div class="filters no-print">
+            <input type="text" class="form-control" id="inv-search" placeholder="Rechercher un article…" style="font-size:12px;" oninput="renderSaisieInventaire()">
+            <label class="chk-tout"><input type="checkbox" id="inv-ecarts" onchange="renderSaisieInventaire()"> Seulement les écarts</label>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>Article</th><th>Stock théorique</th><th>Stock compté</th><th>Écart</th></tr></thead>
+            <tbody id="inv-lignes"></tbody>
+          </table></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;" class="no-print" id="inv-actions">
+            <button class="btn btn-ghost" onclick="enregistrerBrouillon()">💾 Enregistrer le brouillon</button>
+            <button class="btn btn-success" id="btn-inv-valider" onclick="validerInventaire()">✅ Valider l'inventaire</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════ LIVRAISONS TMMB ════════ -->
+      <div class="page" id="page-livraisons">
+        <div class="sec-hdr">
+          <div class="sec-title">Livraisons TMMB déduites du stock</div>
+          <button class="btn btn-primary btn-sm no-print" id="btn-relire-liv" onclick="relireLivraisons(true)">🔄 Relire les livraisons</button>
+        </div>
+        <div class="alert alert-info" id="liv-info"></div>
+        <div class="card" id="liv-averifier-card" style="display:none;">
+          <div class="card-title">⚠️ À vérifier</div>
+          <div class="tw"><table>
+            <thead><tr><th>Date</th><th>Produit</th><th>Qté</th><th>Problème</th><th class="no-print"></th></tr></thead>
+            <tbody id="liv-averifier"></tbody>
+          </table></div>
+        </div>
+        <div class="filters">
+          <span class="date-range"><label>Du</label><input type="date" class="form-control" id="liv-du" style="font-size:12px;" onchange="chargerLivTraitees()">
+          <label>au</label><input type="date" class="form-control" id="liv-au" style="font-size:12px;" onchange="chargerLivTraitees()"></span>
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>Date</th><th>Produit</th><th>Qté</th><th>Agence</th><th>Articles sortis</th><th>Traitée le</th></tr></thead>
+          <tbody id="liv-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ════════ MOUVEMENTS & RAPPORTS ════════ -->
+      <div class="page" id="page-mouvements">
+        <div class="filters">
+          <span class="date-range"><label>Du</label><input type="date" class="form-control" id="mv-du" style="font-size:12px;">
+          <label>au</label><input type="date" class="form-control" id="mv-au" style="font-size:12px;"></span>
+          <select class="form-control" id="mv-agence" style="font-size:12px;"></select>
+          <select class="form-control" id="mv-type" style="font-size:12px;">
+            <option value="">Tous les types</option>
+            <option value="entree">Entrées fournisseurs</option>
+            <option value="transfert">Transferts</option>
+            <option value="livraison">Livraisons TMMB</option>
+            <option value="inventaire">Inventaires (écarts)</option>
+            <option value="reintegration">Réintégrations</option>
+          </select>
+          <button class="btn btn-primary btn-sm no-print" onclick="chargerMouvements()">Afficher</button>
+          <button class="btn btn-ghost btn-sm no-print" onclick="exportMouvementsCsv()">⬇️ CSV</button>
+        </div>
+        <div class="kpi-row kpi-4" id="mv-kpi"></div>
+        <details class="coll" open>
+          <summary class="coll-sum"><span class="coll-title">📊 Synthèse par article sur la période</span><span class="coll-hint">cliquer pour replier / déplier</span></summary>
+          <div class="tw"><table>
+            <thead><tr><th>Article</th><th>Stock de départ</th><th>Entrées</th><th>Transferts reçus</th><th>Transferts envoyés</th><th>Livraisons</th><th>Écarts d'inventaire</th><th>Variation</th><th>Stock actuel</th><th>Valeur actuelle</th></tr></thead>
+            <tbody id="mv-synthese"></tbody>
+          </table></div>
+        </details>
+        <details class="coll">
+          <summary class="coll-sum"><span class="coll-title">📑 Détail des mouvements <span class="coll-count" id="mv-count"></span></span><span class="coll-hint">cliquer pour replier / déplier</span></summary>
+          <div class="tw"><table>
+            <thead><tr><th>Date</th><th>Type</th><th>Article</th><th>Agence</th><th>Quantité</th><th>Prix achat</th><th>Détail</th><th>Par</th></tr></thead>
+            <tbody id="mv-body"></tbody>
+          </table></div>
+        </details>
+      </div>
+
+      <!-- ════════ RÉGLAGES (admin) ════════ -->
+      <div class="page" id="page-reglages">
+        <div class="card">
+          <div class="card-title">📅 Jour J — début de la prise en compte des livraisons TMMB</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Les livraisons TMMB <b>datées de ce jour ou après</b> et marquées « livrées » font baisser le stock de l'agence du client, une seule fois chacune. Les livraisons plus anciennes ne sont jamais prises en compte.</p>
+          <div class="form-row">
+            <div class="form-group"><div class="form-label">Jour J</div><input type="date" class="form-control" id="rg-jourj"></div>
+            <div class="form-group" style="display:flex;align-items:flex-end;"><button class="btn btn-primary" onclick="enregistrerJourJ()">💾 Enregistrer</button></div>
+          </div>
+          <div class="alert alert-warn" style="margin-top:10px;">⚠️ Avancer le jour J ne remet pas en stock les livraisons déjà déduites. Le reculer fera relire les livraisons de la période ajoutée au prochain chargement.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALE ARTICLE ═══════════ -->
+<div class="mo hidden" id="modal-article">
+  <div class="md">
+    <div class="mh"><div class="md-title" id="ma-titre">Article</div><button class="close-btn" onclick="fermerModale('modal-article')">✕</button></div>
+    <div class="mb">
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Prix d'achat unitaire (FCFA)</div><input type="number" class="form-control" id="ma-prix" min="0" step="1"></div>
+        <div class="form-group"><div class="form-label">Seuil d'alerte (par agence)</div><input type="number" class="form-control" id="ma-seuil" min="0" step="1"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);">Le prix d'achat est mis à jour automatiquement à chaque entrée fournisseur. Laissez vide pour reprendre la valeur de TMMB.</div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-article')">Annuler</button><button class="btn btn-primary" onclick="enregistrerArticle()">💾 Enregistrer</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+<script type="module" src="app-firebase.js"></script>
+</body>
+</html>
