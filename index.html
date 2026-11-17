@@ -72,6 +72,7 @@
         <div class="nav-item" id="nav-general" onclick="go('general')">🏭 État du stock général</div>
         <div class="nav-item" id="nav-entrees" onclick="go('entrees')">📥 Entrées fournisseurs</div>
         <div class="nav-item" id="nav-dispatch" onclick="go('dispatch')">🚚 Dispatch vers agences</div>
+        <div class="nav-item" id="nav-demandes" onclick="go('demandes')">📨 Demandes des agences</div>
         <div class="nav-item" id="nav-sorties" onclick="go('sorties')">📤 Autres sorties</div>
       </div>
     </div>
@@ -344,6 +345,23 @@
         </details>
       </div>
 
+      <!-- ════════ v4 : DEMANDES DES AGENCES ════════ -->
+      <div class="page" id="page-demandes">
+        <div class="sec-hdr">
+          <div class="sec-title">Demandes de produits des agences (TMMB)</div>
+          <button class="btn btn-primary btn-sm no-print" onclick="chargerDemandes()">🔄 Actualiser</button>
+        </div>
+        <div class="alert alert-info" id="dm-info"></div>
+        <div class="kpi-row kpi-3" id="dm-kpi" style="grid-template-columns:repeat(3,1fr);"></div>
+        <div class="card">
+          <div class="filters">
+            <select class="form-control f-sm" id="dm-statut" onchange="renderDemandes()"><option value="">Tous les statuts</option><option value="en_attente" selected>En attente</option><option value="partielle">Partielle</option><option value="cloturee">Clôturée</option></select>
+            <select class="form-control f-sm f-agence" id="dm-agence" onchange="renderDemandes()"></select>
+          </div>
+          <div class="tw"><table><thead><tr><th>Date</th><th>Agence</th><th>Articles</th><th>Statut</th><th class="no-print"></th></tr></thead><tbody id="dm-liste"></tbody></table></div>
+        </div>
+      </div>
+
       <!-- ════════ RÉGLAGES (admin) ════════ -->
       <div class="page" id="page-reglages">
         <div class="card">
@@ -355,9 +373,27 @@
           </div>
           <div class="alert alert-warn" style="margin-top:10px;">⚠️ Avancer le jour J ne remet pas en stock les livraisons déjà déduites. Le reculer fera relire les livraisons de la période ajoutée.</div>
         </div>
+        <div class="card">
+          <div class="card-title">📨 Traitement des demandes des agences</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Quand c'est activé, le gestionnaire traite ici les demandes faites dans TMMB : le dispatch est enregistré et la réponse s'affiche dans TMMB. À activer seulement quand le stock n'est plus géré dans TMMB.</p>
+          <div style="display:flex;gap:12px;align-items:center;"><span id="rg-demandes-etat"></span><button class="btn btn-primary" id="rg-demandes-btn" onclick="basculerDemandes()">▶️ Activer</button></div>
+        </div>
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- ═══════════ v4 : MODALE TRAITEMENT D'UNE DEMANDE ═══════════ -->
+<div class="mo hidden" id="modal-demande">
+  <div class="md">
+    <div class="mh"><div class="md-title" id="md-titre">Traiter</div><button class="close-btn" onclick="fermerModale('modal-demande')">✕</button></div>
+    <div class="mb">
+      <div class="form-group"><div class="form-label">Date d'envoi *</div><input type="date" class="form-control" id="md-date"></div>
+      <div class="tw"><table class="lignes"><thead><tr><th>Article</th><th>Demandé</th><th>Envoyé</th><th>Indisponible / délai</th></tr></thead><tbody id="md-lignes"></tbody></table></div>
+      <div class="form-group"><div class="form-label">Note pour le chef d'agence (visible dans TMMB)</div><input type="text" class="form-control" id="md-note" maxlength="300"></div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-demande')">Annuler</button><button class="btn btn-success" id="btn-md-valider" onclick="validerDemande()">✅ Valider</button></div>
   </div>
 </div>
 
