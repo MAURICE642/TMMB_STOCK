@@ -48,3 +48,61 @@ table.lignes td.num{white-space:nowrap;font-weight:600;}
   .form-row-3{grid-template-columns:1fr;}
 }
 .alert a,.card a{color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:2px;}
+
+/* ── Menu : groupes repliables ── */
+.nav-section{cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;}
+.nav-section::after{content:'▾';font-size:10px;color:var(--muted);transition:transform .15s;}
+.nav-group.ferme .nav-section::after{transform:rotate(-90deg);}
+.nav-group.ferme .nav-items{display:none;}
+.nav-group.ferme.contient-actif .nav-section{color:var(--accent);}
+.admin-seul{display:none;}
+body.role-admin .admin-seul{display:block;}
+body.role-admin td.admin-seul,body.role-admin th.admin-seul{display:table-cell;}
+
+/* ── Filtres ── */
+.f-sm{font-size:12px;max-width:220px;}
+.date-range{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.date-range label{font-size:11px;color:var(--muted);}
+
+/* ── Listes longues repliées ── */
+tr.ligne-plus td{text-align:center;padding:10px;background:var(--surface2);}
+tr.ligne-plus button{margin:0 4px;}
+
+/* ── Opérations ── */
+.op-ligne{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:3px 0;}
+.op-annulee{opacity:0.55;}
+.op-annulee .op-txt{text-decoration:line-through;}
+.tag-annule{font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(248,113,113,0.12);color:var(--danger);border:1px solid rgba(248,113,113,0.3);}
+.tag-modifie{font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(192,132,252,0.12);color:var(--purple);border:1px solid rgba(192,132,252,0.3);}
+.lieu-general{color:var(--accent);font-weight:700;}
+
+/* ── Rapport d'inventaire (écran) ── */
+.rapport-papier{background:#fff;color:#1a1a1a;border-radius:6px;padding:28px 32px;max-width:1000px;margin:0 auto;box-shadow:0 4px 30px rgba(0,0,0,0.4);}
+.rap-doc{font-family:'IBM Plex Sans',Arial,sans-serif;font-size:12px;color:#1a1a1a;}
+.rap-doc h1{font-family:'Space Grotesk',Arial,sans-serif;font-size:20px;margin:0 0 2px;color:#1a1a1a;}
+.rap-doc .rap-ruban{height:6px;background:repeating-linear-gradient(-45deg,#f59e0b 0 10px,#1a1205 10px 20px);margin:-28px -32px 20px;border-radius:6px 6px 0 0;}
+.rap-doc .rap-entete{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:14px;}
+.rap-doc .rap-num{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:#b45309;}
+.rap-doc .rap-meta{font-size:12px;line-height:1.7;}
+.rap-doc table{width:100%;border-collapse:collapse;margin:10px 0;}
+.rap-doc th{background:#f3f0ea;color:#333;font-size:10.5px;text-transform:uppercase;letter-spacing:0.4px;text-align:left;padding:6px 8px;border:1px solid #ddd;}
+.rap-doc td{padding:5px 8px;border:1px solid #e3e3e3;font-size:11.5px;}
+.rap-doc td.n{text-align:right;white-space:nowrap;}
+.rap-doc .pos{color:#047857;font-weight:700;}
+.rap-doc .neg{color:#b91c1c;font-weight:700;}
+.rap-doc .rap-totaux{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0;}
+.rap-doc .rap-totaux div{border:1px solid #e3e3e3;border-radius:5px;padding:8px 10px;}
+.rap-doc .rap-totaux b{display:block;font-size:15px;}
+.rap-doc .rap-signatures{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px;}
+.rap-doc .rap-signatures div{border-top:1px solid #999;padding-top:6px;font-size:11px;color:#555;}
+.rap-doc .rap-pied{margin-top:18px;font-size:10px;color:#777;}
+
+/* ── Impression d'un rapport : seule la zone d'impression sort ── */
+#print-zone{display:none;}
+@media print{
+  body.impression > *:not(#print-zone){display:none!important;}
+  body.impression #print-zone{display:block!important;}
+  body.impression{background:#fff!important;}
+  body.impression .rap-doc .rap-ruban{margin:0 0 14px;}
+  @page{size:A4;margin:12mm;}
+}

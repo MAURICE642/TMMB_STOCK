@@ -60,22 +60,50 @@
       <div class="logo-badge">ENTREPÔT · STOCK</div>
     </div>
 
-    <div class="nav-section">Suivi</div>
-    <div class="nav-item active" id="nav-dashboard" onclick="go('dashboard')">📊 Vue d'ensemble</div>
-    <div class="nav-item" id="nav-stock" onclick="go('stock')">📦 Stock par agence</div>
-    <div class="nav-item" id="nav-articles" onclick="go('articles')">🏷️ Articles</div>
-
-    <div class="nav-section">Opérations</div>
-    <div class="nav-item" id="nav-entrees" onclick="go('entrees')">📥 Entrées fournisseurs</div>
-    <div class="nav-item" id="nav-transferts" onclick="go('transferts')">🔁 Transferts</div>
-    <div class="nav-item" id="nav-inventaires" onclick="go('inventaires')">📋 Inventaires</div>
-
-    <div class="nav-section">Contrôle</div>
-    <div class="nav-item" id="nav-livraisons" onclick="go('livraisons')">🚚 Livraisons TMMB <span class="badge" id="badge-averifier" style="display:none;"></span></div>
-    <div class="nav-item" id="nav-mouvements" onclick="go('mouvements')">📑 Mouvements & rapports</div>
-
-    <div class="nav-section" id="nav-section-admin" style="display:none;">Administration</div>
-    <div class="nav-item" id="nav-reglages" onclick="go('reglages')" style="display:none;">⚙️ Réglages</div>
+    <div class="nav-group" data-groupe="suivi">
+      <div class="nav-section" onclick="basculerGroupe(this)">Suivi</div>
+      <div class="nav-items">
+        <div class="nav-item active" id="nav-dashboard" onclick="go('dashboard')">📊 Vue d'ensemble</div>
+      </div>
+    </div>
+    <div class="nav-group" data-groupe="general">
+      <div class="nav-section" onclick="basculerGroupe(this)">Stock général</div>
+      <div class="nav-items">
+        <div class="nav-item" id="nav-general" onclick="go('general')">🏭 État du stock général</div>
+        <div class="nav-item" id="nav-entrees" onclick="go('entrees')">📥 Entrées fournisseurs</div>
+        <div class="nav-item" id="nav-dispatch" onclick="go('dispatch')">🚚 Dispatch vers agences</div>
+        <div class="nav-item" id="nav-sorties" onclick="go('sorties')">📤 Autres sorties</div>
+      </div>
+    </div>
+    <div class="nav-group" data-groupe="agences">
+      <div class="nav-section" onclick="basculerGroupe(this)">Stock des agences</div>
+      <div class="nav-items">
+        <div class="nav-item" id="nav-agences" onclick="go('agences')">🏢 Stock par agence</div>
+        <div class="nav-item" id="nav-transferts" onclick="go('transferts')">🔁 Transferts entre lieux</div>
+        <div class="nav-item" id="nav-livraisons" onclick="go('livraisons')">📦 Livraisons TMMB <span class="badge" id="badge-averifier" style="display:none;"></span></div>
+      </div>
+    </div>
+    <div class="nav-group" data-groupe="inventaires">
+      <div class="nav-section" onclick="basculerGroupe(this)">Inventaires</div>
+      <div class="nav-items">
+        <div class="nav-item" id="nav-inventaires" onclick="go('inventaires')">📋 Inventaires</div>
+        <div class="nav-item" id="nav-rapports" onclick="go('rapports')">🖨️ Rapports d'inventaire</div>
+      </div>
+    </div>
+    <div class="nav-group" data-groupe="controle">
+      <div class="nav-section" onclick="basculerGroupe(this)">Contrôle</div>
+      <div class="nav-items">
+        <div class="nav-item" id="nav-mouvements" onclick="go('mouvements')">📑 Mouvements & synthèse</div>
+        <div class="nav-item" id="nav-articles" onclick="go('articles')">🏷️ Articles</div>
+      </div>
+    </div>
+    <div class="nav-group admin-seul" data-groupe="admin">
+      <div class="nav-section" onclick="basculerGroupe(this)">Administration</div>
+      <div class="nav-items">
+        <div class="nav-item" id="nav-valeurs" onclick="go('valeurs')">💰 Achats & valeurs</div>
+        <div class="nav-item" id="nav-reglages" onclick="go('reglages')">⚙️ Réglages</div>
+      </div>
+    </div>
 
     <div class="sidebar-footer">
       <div class="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Connecté</span></div>
@@ -95,7 +123,6 @@
           <div class="user-avatar avatar-admin" id="user-avatar">?</div>
           <span id="user-badge-name">—</span>
         </div>
-        <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">🖨️ Imprimer</button>
         <button class="btn btn-ghost btn-sm no-print" onclick="syncNow()">🔄 Actualiser</button>
       </div>
     </div>
@@ -107,98 +134,74 @@
         <div id="dash-alerte-config"></div>
         <div class="kpi-row kpi-4" id="dash-kpi"></div>
         <div class="g2">
-          <div class="card">
-            <div class="card-title">⚠️ Stock bas (sous le seuil)</div>
-            <div id="dash-bas"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">🏢 Valeur du stock par agence</div>
-            <div id="dash-agences"></div>
-          </div>
+          <div class="card"><div class="card-title">🏬 État par lieu</div><div id="dash-lieux"></div></div>
+          <div class="card"><div class="card-title">⚠️ Stock bas (sous le seuil)</div><div id="dash-bas"></div></div>
         </div>
-        <div class="card">
-          <div class="card-title">🚚 Dernière lecture des livraisons TMMB</div>
-          <div id="dash-liv"></div>
-        </div>
+        <div class="card"><div class="card-title">📦 Dernière lecture des livraisons TMMB</div><div id="dash-liv"></div></div>
       </div>
+
+      <!-- ════════ ÉTAT DU STOCK GÉNÉRAL ════════ -->
+      <div class="page" id="page-general">
+        <div class="filters">
+          <input type="text" class="form-control f-sm" id="gen-search" placeholder="🔍 Article ou référence…" oninput="renderGeneral()">
+          <select class="form-control f-sm f-cat" id="gen-cat" onchange="renderGeneral()"></select>
+          <select class="form-control f-sm" id="gen-etat" onchange="renderGeneral()">
+            <option value="">Tous les articles</option><option value="stock">En stock (> 0)</option><option value="bas">Stock bas</option><option value="zero">À zéro</option><option value="neg">Négatif</option>
+          </select>
+          <button class="btn btn-ghost btn-sm no-print" onclick="exportStockCsv('general')">⬇️ CSV</button>
+        </div>
+        <div class="kpi-row kpi-3" id="gen-kpi"></div>
+        <div class="tw"><table><thead id="gen-head"></thead><tbody id="gen-body"></tbody></table></div>
+      </div>
+
+      <!-- ════════ OPÉRATIONS (entrées, dispatch, sorties, transferts) ════════ -->
+      <div class="page" id="page-entrees"><div data-op="entree"></div></div>
+      <div class="page" id="page-dispatch"><div data-op="dispatch"></div></div>
+      <div class="page" id="page-sorties"><div data-op="sortie"></div></div>
+      <div class="page" id="page-transferts"><div data-op="transfert"></div></div>
 
       <!-- ════════ STOCK PAR AGENCE ════════ -->
-      <div class="page" id="page-stock">
+      <div class="page" id="page-agences">
         <div class="filters">
-          <select class="form-control" id="st-agence" onchange="renderStock()" style="font-size:12px;"></select>
-          <input type="text" class="form-control" id="st-search" placeholder="Rechercher un article…" style="font-size:12px;" oninput="renderStock()">
-          <label class="chk-tout"><input type="checkbox" id="st-bas" onchange="renderStock()"> Seulement le stock bas</label>
-          <button class="btn btn-ghost btn-sm no-print" onclick="exportStockCsv()">⬇️ CSV</button>
+          <select class="form-control f-sm" id="ag-agence" onchange="renderAgences()"></select>
+          <input type="text" class="form-control f-sm" id="ag-search" placeholder="🔍 Article ou référence…" oninput="renderAgences()">
+          <select class="form-control f-sm f-cat" id="ag-cat" onchange="renderAgences()"></select>
+          <select class="form-control f-sm" id="ag-etat" onchange="renderAgences()">
+            <option value="">Tous les articles</option><option value="stock">En stock (> 0)</option><option value="bas">Stock bas</option><option value="zero">À zéro</option><option value="neg">Négatif</option>
+          </select>
+          <button class="btn btn-ghost btn-sm no-print" onclick="exportStockCsv('agences')">⬇️ CSV</button>
         </div>
-        <div class="kpi-row kpi-3" id="st-kpi"></div>
-        <div class="tw"><table>
-          <thead id="st-head"></thead>
-          <tbody id="st-body"></tbody>
-        </table></div>
+        <div class="kpi-row kpi-3" id="ag-kpi"></div>
+        <div class="tw"><table><thead id="ag-head"></thead><tbody id="ag-body"></tbody></table></div>
       </div>
 
-      <!-- ════════ ARTICLES ════════ -->
-      <div class="page" id="page-articles">
-        <div class="alert alert-info">La liste des articles vient de TMMB (lecture seule). Ici, vous réglez seulement le <b>prix d'achat</b> et le <b>seuil d'alerte</b> propres à la gestion de stock.</div>
+      <!-- ════════ LIVRAISONS TMMB ════════ -->
+      <div class="page" id="page-livraisons">
+        <div class="sec-hdr">
+          <div class="sec-title">Livraisons TMMB déduites du stock des agences</div>
+          <button class="btn btn-primary btn-sm no-print" id="btn-relire-liv" onclick="relireLivraisons(true)">🔄 Relire les livraisons</button>
+        </div>
+        <div class="alert alert-info" id="liv-info"></div>
+        <details class="coll" id="liv-averifier-card" open style="display:none;">
+          <summary class="coll-sum"><span class="coll-title">⚠️ À vérifier <span class="coll-count" id="liv-averifier-count"></span></span><span class="coll-hint">cliquer pour replier / déplier</span></summary>
+          <div class="tw"><table>
+            <thead><tr><th>Date</th><th>Produit</th><th>Qté</th><th>Problème</th><th class="no-print"></th></tr></thead>
+            <tbody id="liv-averifier"></tbody>
+          </table></div>
+        </details>
         <div class="filters">
-          <input type="text" class="form-control" id="art-search" placeholder="Rechercher…" style="font-size:12px;" oninput="renderArticles()">
+          <span class="date-range"><label>Du</label><input type="date" class="form-control f-sm" id="liv-du" onchange="chargerLivTraitees()">
+          <label>au</label><input type="date" class="form-control f-sm" id="liv-au" onchange="chargerLivTraitees()"></span>
+          <select class="form-control f-sm f-agence" id="liv-agence" onchange="renderLivTraitees()"></select>
+          <input type="text" class="form-control f-sm" id="liv-search" placeholder="🔍 Produit…" oninput="renderLivTraitees()">
+          <select class="form-control f-sm" id="liv-statut" onchange="renderLivTraitees()">
+            <option value="">Déduites et réintégrées</option><option value="deduit">Déduites</option><option value="reintegree">Réintégrées</option><option value="ignoree">Ignorées</option>
+          </select>
         </div>
         <div class="tw"><table>
-          <thead><tr><th>Réf.</th><th>Article</th><th>Catégorie</th><th>Unité</th><th>Prix d'achat</th><th>Seuil d'alerte</th><th>Stock total</th><th class="no-print"></th></tr></thead>
-          <tbody id="art-body"></tbody>
+          <thead><tr><th>Date</th><th>Produit</th><th>Qté</th><th>Agence</th><th>Articles sortis</th><th>Traitée le</th></tr></thead>
+          <tbody id="liv-body"></tbody>
         </table></div>
-      </div>
-
-      <!-- ════════ ENTRÉES ════════ -->
-      <div class="page" id="page-entrees">
-        <div class="card no-print">
-          <div class="card-title">📥 Nouvelle entrée fournisseur</div>
-          <div class="form-row-3">
-            <div class="form-group"><div class="form-label">Agence qui reçoit *</div><select class="form-control" id="en-agence"></select></div>
-            <div class="form-group"><div class="form-label">Date *</div><input type="date" class="form-control" id="en-date"></div>
-            <div class="form-group"><div class="form-label">Fournisseur *</div><input type="text" class="form-control" id="en-fournisseur" maxlength="100" placeholder="Nom du fournisseur"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-group"><div class="form-label">N° facture / bon</div><input type="text" class="form-control" id="en-ref" maxlength="60"></div>
-            <div class="form-group"><div class="form-label">Note</div><input type="text" class="form-control" id="en-note" maxlength="200"></div>
-          </div>
-          <table class="lignes"><thead><tr><th>Article</th><th>Quantité</th><th>Prix d'achat unitaire (FCFA)</th><th>Total</th><th></th></tr></thead><tbody id="en-lignes"></tbody></table>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-            <button class="btn btn-ghost btn-sm" onclick="ajouterLigne('en')">+ Ajouter un article</button>
-            <div style="flex:1;text-align:right;font-weight:700;" id="en-total"></div>
-            <button class="btn btn-success" id="btn-en" onclick="enregistrerEntree()">✅ Enregistrer l'entrée</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">🧾 Entrées enregistrées</div>
-          <div class="filters">
-            <span class="date-range"><label>Du</label><input type="date" class="form-control" id="enh-du" style="font-size:12px;">
-            <label>au</label><input type="date" class="form-control" id="enh-au" style="font-size:12px;"></span>
-            <button class="btn btn-ghost btn-sm no-print" onclick="chargerHistorique('entree','en-histo')">Afficher</button>
-          </div>
-          <div class="muted" id="enh-aide" style="margin-bottom:8px;display:none;">✏️ Administrateur : le bouton « Prix » à côté d'un article corrige son prix d'achat sur cette entrée. La quantité et le stock ne changent pas ; l'ancien prix reste dans l'historique.</div>
-          <div id="en-histo"></div>
-        </div>
-      </div>
-
-      <!-- ════════ TRANSFERTS ════════ -->
-      <div class="page" id="page-transferts">
-        <div class="card no-print">
-          <div class="card-title">🔁 Nouveau transfert entre agences</div>
-          <div class="form-row-3">
-            <div class="form-group"><div class="form-label">Agence de départ *</div><select class="form-control" id="tr-source" onchange="majLignesTransfert()"></select></div>
-            <div class="form-group"><div class="form-label">Agence d'arrivée *</div><select class="form-control" id="tr-dest"></select></div>
-            <div class="form-group"><div class="form-label">Date *</div><input type="date" class="form-control" id="tr-date"></div>
-          </div>
-          <div class="form-group"><div class="form-label">Note</div><input type="text" class="form-control" id="tr-note" maxlength="200"></div>
-          <table class="lignes"><thead><tr><th>Article</th><th>Disponible au départ</th><th>Quantité</th><th></th></tr></thead><tbody id="tr-lignes"></tbody></table>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-            <button class="btn btn-ghost btn-sm" onclick="ajouterLigne('tr')">+ Ajouter un article</button>
-            <div style="flex:1;"></div>
-            <button class="btn btn-success" id="btn-tr" onclick="enregistrerTransfert()">✅ Enregistrer le transfert</button>
-          </div>
-        </div>
-        <div class="card"><div class="card-title">🧾 Derniers transferts</div><div id="tr-histo"></div></div>
       </div>
 
       <!-- ════════ INVENTAIRES ════════ -->
@@ -207,13 +210,19 @@
           <div class="sec-hdr">
             <div class="sec-title">Inventaires</div>
             <div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;">
-              <select class="form-control" id="inv-new-agence" style="font-size:12px;"></select>
+              <select class="form-control f-sm" id="inv-new-lieu"></select>
               <button class="btn btn-primary btn-sm" onclick="nouvelInventaire()">+ Nouvel inventaire</button>
             </div>
           </div>
-          <div class="alert alert-info">Le <b>premier inventaire</b> de chaque agence est l'<b>inventaire de départ</b> : il fixe le stock réel compté. Les suivants comparent le stock théorique au stock compté et corrigent les écarts.</div>
+          <div class="alert alert-info" id="inv-regle"></div>
+          <div class="filters">
+            <select class="form-control f-sm f-lieu" id="inv-f-lieu" onchange="renderInventaires()"></select>
+            <select class="form-control f-sm" id="inv-f-type" onchange="renderInventaires()"><option value="">Tous les types</option><option value="depart">Départ</option><option value="periodique">Périodique</option></select>
+            <select class="form-control f-sm" id="inv-f-statut" onchange="renderInventaires()"><option value="">Tous les statuts</option><option value="encours">Brouillons</option><option value="valide">Validés</option></select>
+            <span class="date-range"><label>Du</label><input type="date" class="form-control f-sm" id="inv-f-du" onchange="renderInventaires()"><label>au</label><input type="date" class="form-control f-sm" id="inv-f-au" onchange="renderInventaires()"></span>
+          </div>
           <div class="tw"><table>
-            <thead><tr><th>Date</th><th>Agence</th><th>Type</th><th>Statut</th><th>Articles comptés</th><th>Écarts</th><th>Par</th><th class="no-print"></th></tr></thead>
+            <thead><tr><th>Date</th><th>Lieu</th><th>Type</th><th>Statut</th><th>Articles</th><th>Écarts</th><th>Par</th><th>Rapport</th><th class="no-print"></th></tr></thead>
             <tbody id="inv-body"></tbody>
           </table></div>
         </div>
@@ -224,8 +233,12 @@
           </div>
           <div class="alert alert-warn" id="inv-aide"></div>
           <div class="filters no-print">
-            <input type="text" class="form-control" id="inv-search" placeholder="Rechercher un article…" style="font-size:12px;" oninput="renderSaisieInventaire()">
-            <label class="chk-tout"><input type="checkbox" id="inv-ecarts" onchange="renderSaisieInventaire()"> Seulement les écarts</label>
+            <input type="text" class="form-control f-sm" id="inv-search" placeholder="🔍 Article ou référence…" oninput="renderSaisieInventaire()">
+            <select class="form-control f-sm f-cat" id="inv-cat" onchange="renderSaisieInventaire()"></select>
+            <select class="form-control f-sm" id="inv-filtre" onchange="renderSaisieInventaire()">
+              <option value="">Tous les articles</option><option value="restant">Pas encore comptés</option><option value="saisis">Déjà comptés</option><option value="ecarts">Avec écart</option>
+            </select>
+            <span class="muted" id="inv-progression"></span>
           </div>
           <div class="tw"><table>
             <thead><tr><th>Article</th><th>Stock théorique</th><th>Stock compté</th><th>Écart</th></tr></thead>
@@ -238,61 +251,96 @@
         </div>
       </div>
 
-      <!-- ════════ LIVRAISONS TMMB ════════ -->
-      <div class="page" id="page-livraisons">
-        <div class="sec-hdr">
-          <div class="sec-title">Livraisons TMMB déduites du stock</div>
-          <button class="btn btn-primary btn-sm no-print" id="btn-relire-liv" onclick="relireLivraisons(true)">🔄 Relire les livraisons</button>
-        </div>
-        <div class="alert alert-info" id="liv-info"></div>
-        <div class="card" id="liv-averifier-card" style="display:none;">
-          <div class="card-title">⚠️ À vérifier</div>
+      <!-- ════════ RAPPORTS D'INVENTAIRE ════════ -->
+      <div class="page" id="page-rapports">
+        <div id="rap-liste">
+          <div class="filters">
+            <input type="text" class="form-control f-sm" id="rap-search" placeholder="🔍 N° de rapport…" oninput="renderRapports()">
+            <select class="form-control f-sm f-lieu" id="rap-lieu" onchange="renderRapports()"></select>
+            <select class="form-control f-sm" id="rap-type" onchange="renderRapports()"><option value="">Tous les types</option><option value="depart">Départ</option><option value="periodique">Périodique</option></select>
+            <span class="date-range"><label>Du</label><input type="date" class="form-control f-sm" id="rap-du" onchange="chargerRapports()"><label>au</label><input type="date" class="form-control f-sm" id="rap-au" onchange="chargerRapports()"></span>
+          </div>
           <div class="tw"><table>
-            <thead><tr><th>Date</th><th>Produit</th><th>Qté</th><th>Problème</th><th class="no-print"></th></tr></thead>
-            <tbody id="liv-averifier"></tbody>
+            <thead><tr><th>N°</th><th>Date</th><th>Lieu</th><th>Type</th><th>Articles</th><th>Écarts</th><th>Validé par</th><th class="no-print"></th></tr></thead>
+            <tbody id="rap-body"></tbody>
           </table></div>
         </div>
-        <div class="filters">
-          <span class="date-range"><label>Du</label><input type="date" class="form-control" id="liv-du" style="font-size:12px;" onchange="chargerLivTraitees()">
-          <label>au</label><input type="date" class="form-control" id="liv-au" style="font-size:12px;" onchange="chargerLivTraitees()"></span>
+        <div id="rap-vue" style="display:none;">
+          <div class="sec-hdr no-print">
+            <button class="btn btn-ghost btn-sm" onclick="fermerRapport()">← Retour aux rapports</button>
+            <button class="btn btn-primary btn-sm" onclick="imprimerRapportOuvert()">🖨️ Imprimer</button>
+          </div>
+          <div class="rapport-papier" id="rap-contenu"></div>
         </div>
-        <div class="tw"><table>
-          <thead><tr><th>Date</th><th>Produit</th><th>Qté</th><th>Agence</th><th>Articles sortis</th><th>Traitée le</th></tr></thead>
-          <tbody id="liv-body"></tbody>
-        </table></div>
       </div>
 
-      <!-- ════════ MOUVEMENTS & RAPPORTS ════════ -->
+      <!-- ════════ MOUVEMENTS & SYNTHÈSE ════════ -->
       <div class="page" id="page-mouvements">
         <div class="filters">
-          <span class="date-range"><label>Du</label><input type="date" class="form-control" id="mv-du" style="font-size:12px;">
-          <label>au</label><input type="date" class="form-control" id="mv-au" style="font-size:12px;"></span>
-          <select class="form-control" id="mv-agence" style="font-size:12px;"></select>
-          <select class="form-control" id="mv-type" style="font-size:12px;">
+          <span class="date-range"><label>Du</label><input type="date" class="form-control f-sm" id="mv-du">
+          <label>au</label><input type="date" class="form-control f-sm" id="mv-au"></span>
+          <button class="btn btn-primary btn-sm no-print" onclick="chargerMouvements()">Afficher la période</button>
+        </div>
+        <div class="filters">
+          <select class="form-control f-sm f-lieu" id="mv-lieu"></select>
+          <select class="form-control f-sm" id="mv-type">
             <option value="">Tous les types</option>
-            <option value="entree">Entrées fournisseurs</option>
-            <option value="transfert">Transferts</option>
-            <option value="livraison">Livraisons TMMB</option>
-            <option value="inventaire">Inventaires (écarts)</option>
-            <option value="reintegration">Réintégrations</option>
+            <option value="entree">Entrées fournisseurs</option><option value="dispatch">Dispatch vers agences</option>
+            <option value="transfert">Transferts (tous)</option><option value="sortie">Autres sorties</option>
+            <option value="livraison">Livraisons TMMB</option><option value="inventaire">Inventaires</option><option value="reintegration">Réintégrations</option>
           </select>
-          <button class="btn btn-primary btn-sm no-print" onclick="chargerMouvements()">Afficher</button>
+          <select class="form-control f-sm f-cat" id="mv-cat"></select>
+          <input type="text" class="form-control f-sm" id="mv-search" placeholder="🔍 Article…">
+          <select class="form-control f-sm" id="mv-statut"><option value="actifs">Sans les annulés</option><option value="tous">Avec les annulés</option><option value="annules">Annulés seulement</option></select>
           <button class="btn btn-ghost btn-sm no-print" onclick="exportMouvementsCsv()">⬇️ CSV</button>
         </div>
         <div class="kpi-row kpi-4" id="mv-kpi"></div>
         <details class="coll" open>
           <summary class="coll-sum"><span class="coll-title">📊 Synthèse par article sur la période</span><span class="coll-hint">cliquer pour replier / déplier</span></summary>
-          <div class="tw"><table>
-            <thead><tr><th>Article</th><th>Stock de départ</th><th>Entrées</th><th>Transferts reçus</th><th>Transferts envoyés</th><th>Livraisons</th><th>Écarts d'inventaire</th><th>Variation</th><th>Stock actuel</th><th>Valeur actuelle</th></tr></thead>
-            <tbody id="mv-synthese"></tbody>
-          </table></div>
+          <div class="tw"><table><thead id="mv-synthese-head"></thead><tbody id="mv-synthese"></tbody></table></div>
         </details>
         <details class="coll">
           <summary class="coll-sum"><span class="coll-title">📑 Détail des mouvements <span class="coll-count" id="mv-count"></span></span><span class="coll-hint">cliquer pour replier / déplier</span></summary>
           <div class="tw"><table>
-            <thead><tr><th>Date</th><th>Type</th><th>Article</th><th>Agence</th><th>Quantité</th><th>Prix achat</th><th>Détail</th><th>Par</th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Article</th><th>Lieu</th><th>Quantité</th><th>Détail</th><th>Par</th></tr></thead>
             <tbody id="mv-body"></tbody>
           </table></div>
+        </details>
+      </div>
+
+      <!-- ════════ ARTICLES ════════ -->
+      <div class="page" id="page-articles">
+        <div class="alert alert-info">La liste des articles vient de TMMB (lecture seule). Ici, vous réglez seulement le <b>seuil d'alerte</b> utilisé par le module stock.</div>
+        <div class="filters">
+          <input type="text" class="form-control f-sm" id="art-search" placeholder="🔍 Article ou référence…" oninput="renderArticles()">
+          <select class="form-control f-sm f-cat" id="art-cat" onchange="renderArticles()"></select>
+          <select class="form-control f-sm" id="art-etat" onchange="renderArticles()"><option value="">Tous</option><option value="seuil">Avec seuil</option><option value="sansseuil">Sans seuil</option><option value="bas">En alerte quelque part</option></select>
+        </div>
+        <div class="tw"><table><thead id="art-head"></thead><tbody id="art-body"></tbody></table></div>
+      </div>
+
+      <!-- ════════ ACHATS & VALEURS (admin) ════════ -->
+      <div class="page" id="page-valeurs">
+        <div class="alert alert-info">🔒 Page réservée à l'administrateur. Les prix d'achat viennent de TMMB (prix d'achat de l'article au moment de l'entrée) ; vous pouvez corriger le prix d'une entrée. Le gestionnaire de stock ne voit aucun prix ni aucune valeur.</div>
+        <div class="filters">
+          <span class="date-range"><label>Du</label><input type="date" class="form-control f-sm" id="va-du"><label>au</label><input type="date" class="form-control f-sm" id="va-au"></span>
+          <button class="btn btn-primary btn-sm no-print" onclick="chargerValeurs()">Afficher la période</button>
+          <input type="text" class="form-control f-sm" id="va-fourn" placeholder="🔍 Fournisseur…" oninput="renderValeurs()">
+          <input type="text" class="form-control f-sm" id="va-search" placeholder="🔍 Article…" oninput="renderValeurs()">
+          <select class="form-control f-sm" id="va-etat" onchange="renderValeurs()"><option value="">Toutes les lignes</option><option value="zero">Prix à 0 (à corriger)</option><option value="corrige">Prix corrigés</option><option value="annule">Annulées</option></select>
+          <button class="btn btn-ghost btn-sm no-print" onclick="exportValeursCsv()">⬇️ CSV</button>
+        </div>
+        <div class="kpi-row kpi-4" id="va-kpi"></div>
+        <details class="coll" open>
+          <summary class="coll-sum"><span class="coll-title">🧾 Lignes d'achat <span class="coll-count" id="va-count"></span></span><span class="coll-hint">cliquer pour replier / déplier</span></summary>
+          <div class="tw"><table>
+            <thead><tr><th>Date</th><th>Fournisseur</th><th>Réf.</th><th>Article</th><th>Qté</th><th>Prix unitaire</th><th>Montant</th><th class="no-print"></th></tr></thead>
+            <tbody id="va-body"></tbody>
+          </table></div>
+        </details>
+        <details class="coll">
+          <summary class="coll-sum"><span class="coll-title">🏬 Valeur actuelle du stock par lieu</span><span class="coll-hint">au prix d'achat TMMB actuel</span></summary>
+          <div class="tw"><table><thead><tr><th>Lieu</th><th>Unités</th><th>Valeur</th></tr></thead><tbody id="va-lieux"></tbody></table></div>
         </details>
       </div>
 
@@ -305,7 +353,7 @@
             <div class="form-group"><div class="form-label">Jour J</div><input type="date" class="form-control" id="rg-jourj"></div>
             <div class="form-group" style="display:flex;align-items:flex-end;"><button class="btn btn-primary" onclick="enregistrerJourJ()">💾 Enregistrer</button></div>
           </div>
-          <div class="alert alert-warn" style="margin-top:10px;">⚠️ Avancer le jour J ne remet pas en stock les livraisons déjà déduites. Le reculer fera relire les livraisons de la période ajoutée au prochain chargement.</div>
+          <div class="alert alert-warn" style="margin-top:10px;">⚠️ Avancer le jour J ne remet pas en stock les livraisons déjà déduites. Le reculer fera relire les livraisons de la période ajoutée.</div>
         </div>
       </div>
 
@@ -313,38 +361,72 @@
   </div>
 </div>
 
-<!-- ═══════════ MODALE ARTICLE ═══════════ -->
+<!-- ═══════════ MODALE SEUIL ═══════════ -->
 <div class="mo hidden" id="modal-article">
   <div class="md">
     <div class="mh"><div class="md-title" id="ma-titre">Article</div><button class="close-btn" onclick="fermerModale('modal-article')">✕</button></div>
     <div class="mb">
-      <div class="form-row">
-        <div class="form-group"><div class="form-label">Prix d'achat unitaire (FCFA)</div><input type="number" class="form-control" id="ma-prix" min="0" step="1"></div>
-        <div class="form-group"><div class="form-label">Seuil d'alerte (par agence)</div><input type="number" class="form-control" id="ma-seuil" min="0" step="1"></div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);">Le prix d'achat est mis à jour automatiquement à chaque entrée fournisseur. Laissez vide pour reprendre la valeur de TMMB.</div>
+      <div class="form-group"><div class="form-label">Seuil d'alerte (par lieu)</div><input type="number" class="form-control" id="ma-seuil" min="0" step="1"></div>
+      <div style="font-size:11px;color:var(--muted);">Laissez vide pour reprendre le stock minimum défini dans TMMB.</div>
     </div>
     <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-article')">Annuler</button><button class="btn btn-primary" onclick="enregistrerArticle()">💾 Enregistrer</button></div>
   </div>
 </div>
 
-<!-- ═══════════ MODALE CORRECTION DE PRIX (admin) ═══════════ -->
+<!-- ═══════════ MODALE CORRECTION D'UNE OPÉRATION (admin) ═══════════ -->
+<div class="mo hidden" id="modal-corr">
+  <div class="md">
+    <div class="mh"><div class="md-title" id="mc-titre">✏️ Corriger</div><button class="close-btn" onclick="fermerModale('modal-corr')">✕</button></div>
+    <div class="mb">
+      <div id="mc-info" style="font-size:13px;margin-bottom:14px;line-height:1.7;"></div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Quantité *</div><input type="number" class="form-control" id="mc-qty" min="1" step="1"></div>
+        <div class="form-group"><div class="form-label">Date *</div><input type="date" class="form-control" id="mc-date"></div>
+      </div>
+      <div class="form-row" id="mc-ligne-fourn">
+        <div class="form-group"><div class="form-label">Fournisseur</div><input type="text" class="form-control" id="mc-fourn" maxlength="100"></div>
+        <div class="form-group"><div class="form-label">N° facture / bon</div><input type="text" class="form-control" id="mc-ref" maxlength="60"></div>
+      </div>
+      <div class="form-group"><div class="form-label">Note</div><input type="text" class="form-control" id="mc-note" maxlength="200"></div>
+      <div class="form-group"><div class="form-label">Motif de la correction *</div><input type="text" class="form-control" id="mc-motif" maxlength="200" placeholder="Ex. : erreur de frappe, bon de livraison corrigé…"></div>
+      <div id="mc-histo" style="font-size:11px;color:var(--muted);"></div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-corr')">Fermer</button><button class="btn btn-primary" id="btn-mc" onclick="enregistrerCorrection()">💾 Enregistrer la correction</button></div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALE ANNULATION (admin) ═══════════ -->
+<div class="mo hidden" id="modal-annul">
+  <div class="md">
+    <div class="mh"><div class="md-title">🚫 Annuler</div><button class="close-btn" onclick="fermerModale('modal-annul')">✕</button></div>
+    <div class="mb">
+      <div id="mn-info" style="font-size:13px;margin-bottom:14px;line-height:1.7;"></div>
+      <div class="alert alert-warn">Le stock sera rétabli comme si l'opération n'avait jamais eu lieu. L'opération reste visible, barrée, avec votre nom, la date et le motif.</div>
+      <div class="form-group"><div class="form-label">Motif de l'annulation *</div><input type="text" class="form-control" id="mn-motif" maxlength="200"></div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-annul')">Fermer</button><button class="btn btn-danger" id="btn-mn" onclick="confirmerAnnulation()">🚫 Annuler l'opération</button></div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALE PRIX (admin) ═══════════ -->
 <div class="mo hidden" id="modal-prix">
   <div class="md">
-    <div class="mh"><div class="md-title">✏️ Corriger le prix d'achat</div><button class="close-btn" onclick="fermerModale('modal-prix')">✕</button></div>
+    <div class="mh"><div class="md-title">💲 Corriger le prix d'achat</div><button class="close-btn" onclick="fermerModale('modal-prix')">✕</button></div>
     <div class="mb">
       <div id="mp-info" style="font-size:13px;margin-bottom:14px;line-height:1.7;"></div>
       <div class="form-row">
         <div class="form-group"><div class="form-label">Nouveau prix unitaire (FCFA) *</div><input type="number" class="form-control" id="mp-prix" min="0" step="1" oninput="majApercuPrix()"></div>
-        <div class="form-group"><div class="form-label">Nouveau montant de la ligne</div><div id="mp-total" style="padding:9px 0;font-weight:700;">—</div></div>
+        <div class="form-group"><div class="form-label">Nouveau montant</div><div id="mp-total" style="padding:9px 0;font-weight:700;">—</div></div>
       </div>
-      <div class="form-group"><div class="form-label">Motif de la correction *</div><input type="text" class="form-control" id="mp-motif" maxlength="200" placeholder="Ex. : facture fournisseur corrigée, hausse du prix…"></div>
+      <div class="form-group"><div class="form-label">Motif *</div><input type="text" class="form-control" id="mp-motif" maxlength="200" placeholder="Ex. : facture fournisseur, hausse du prix…"></div>
       <div id="mp-histo" style="font-size:11px;color:var(--muted);"></div>
     </div>
-    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-prix')">Annuler</button><button class="btn btn-primary" id="btn-mp" onclick="enregistrerCorrectionPrix()">💾 Corriger</button></div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-prix')">Fermer</button><button class="btn btn-primary" id="btn-mp" onclick="enregistrerCorrectionPrix()">💾 Corriger le prix</button></div>
   </div>
 </div>
 
+<!-- Zone d'impression (rapports) -->
+<div id="print-zone"></div>
 <div id="toast"></div>
 
 <script src="app.js"></script>
