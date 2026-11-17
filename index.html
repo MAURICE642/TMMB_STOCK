@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TRIOMPHANT — Stock</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#07090f">
+<meta name="theme-color" content="#0c0b09">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,7 +13,7 @@
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="stock.css">
 </head>
@@ -22,6 +22,8 @@
 <!-- ═══════════ CONNEXION ═══════════ -->
 <div class="auth-overlay" id="auth-screen">
   <div class="auth-card">
+    <div class="ruban"></div>
+    <div class="logo-mark">S</div>
     <div class="auth-logo">TRIOMPHANT — Stock</div>
     <div class="auth-tagline">Accès réservé · Administrateur et gestionnaire de stock</div>
     <div class="auth-section active" id="section-login">
@@ -32,7 +34,7 @@
       <button class="btn-auth" onclick="doLogin()">🔓 Se connecter</button>
       <div class="auth-err" id="login-err"></div>
     </div>
-    <div style="margin-top:18px;padding:12px 14px;background:rgba(249,200,70,0.06);border:1px solid rgba(249,200,70,0.15);border-radius:8px;font-size:11px;color:var(--muted);">
+    <div style="margin-top:18px;padding:12px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:8px;font-size:11px;color:var(--muted);">
       🔐 Utilisez votre compte TMMB. Seuls les rôles <b>admin</b> et <b>gestionnaire de stock</b> ont accès.
     </div>
   </div>
@@ -50,10 +52,12 @@
   <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
 
   <div id="sidebar">
+    <div class="ruban"></div>
     <div class="logo-area">
+      <div class="logo-mark">S</div>
       <div class="logo-name">TRIOMPHANT</div>
       <div class="logo-sub">Module Stock</div>
-      <div class="logo-badge">📦 STOCK</div>
+      <div class="logo-badge">ENTREPÔT · STOCK</div>
     </div>
 
     <div class="nav-section">Suivi</div>
@@ -165,7 +169,16 @@
             <button class="btn btn-success" id="btn-en" onclick="enregistrerEntree()">✅ Enregistrer l'entrée</button>
           </div>
         </div>
-        <div class="card"><div class="card-title">🧾 Dernières entrées</div><div id="en-histo"></div></div>
+        <div class="card">
+          <div class="card-title">🧾 Entrées enregistrées</div>
+          <div class="filters">
+            <span class="date-range"><label>Du</label><input type="date" class="form-control" id="enh-du" style="font-size:12px;">
+            <label>au</label><input type="date" class="form-control" id="enh-au" style="font-size:12px;"></span>
+            <button class="btn btn-ghost btn-sm no-print" onclick="chargerHistorique('entree','en-histo')">Afficher</button>
+          </div>
+          <div class="muted" id="enh-aide" style="margin-bottom:8px;display:none;">✏️ Administrateur : le bouton « Prix » à côté d'un article corrige son prix d'achat sur cette entrée. La quantité et le stock ne changent pas ; l'ancien prix reste dans l'historique.</div>
+          <div id="en-histo"></div>
+        </div>
       </div>
 
       <!-- ════════ TRANSFERTS ════════ -->
@@ -312,6 +325,23 @@
       <div style="font-size:11px;color:var(--muted);">Le prix d'achat est mis à jour automatiquement à chaque entrée fournisseur. Laissez vide pour reprendre la valeur de TMMB.</div>
     </div>
     <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-article')">Annuler</button><button class="btn btn-primary" onclick="enregistrerArticle()">💾 Enregistrer</button></div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALE CORRECTION DE PRIX (admin) ═══════════ -->
+<div class="mo hidden" id="modal-prix">
+  <div class="md">
+    <div class="mh"><div class="md-title">✏️ Corriger le prix d'achat</div><button class="close-btn" onclick="fermerModale('modal-prix')">✕</button></div>
+    <div class="mb">
+      <div id="mp-info" style="font-size:13px;margin-bottom:14px;line-height:1.7;"></div>
+      <div class="form-row">
+        <div class="form-group"><div class="form-label">Nouveau prix unitaire (FCFA) *</div><input type="number" class="form-control" id="mp-prix" min="0" step="1" oninput="majApercuPrix()"></div>
+        <div class="form-group"><div class="form-label">Nouveau montant de la ligne</div><div id="mp-total" style="padding:9px 0;font-weight:700;">—</div></div>
+      </div>
+      <div class="form-group"><div class="form-label">Motif de la correction *</div><input type="text" class="form-control" id="mp-motif" maxlength="200" placeholder="Ex. : facture fournisseur corrigée, hausse du prix…"></div>
+      <div id="mp-histo" style="font-size:11px;color:var(--muted);"></div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-prix')">Annuler</button><button class="btn btn-primary" id="btn-mp" onclick="enregistrerCorrectionPrix()">💾 Corriger</button></div>
   </div>
 </div>
 

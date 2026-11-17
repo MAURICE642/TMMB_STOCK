@@ -85,6 +85,7 @@ function seuil(id){
   if(r && r.seuil != null && r.seuil !== '') return Number(r.seuil)||0;
   return Number((IDX.articles.get(id)||{}).stockMin) || 0;
 }
+const refTag = a => a && a.ref ? `<span class="ref-tag">${esc(a.ref)}</span>` : '';
 function stockTotal(art){ return TDB.agences.reduce((s,a)=>s+qte(a._id, art), 0); }
 
 // Empêche un double clic de lancer deux fois la même écriture.
@@ -302,6 +303,7 @@ function demarrerApp(){
     document.getElementById('liv-du').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     document.getElementById('liv-au').value = t;
   }
+  if(!document.getElementById('enh-du').value){ document.getElementById('enh-du').value = _ilYa(30); document.getElementById('enh-au').value = t; }
   if(!document.getElementById('en-lignes').children.length) ajouterLigne('en');
   if(!document.getElementById('tr-lignes').children.length) ajouterLigne('tr');
   majBandeau();
@@ -431,7 +433,7 @@ window.renderStock = function(){
     document.getElementById('st-body').innerHTML = arts.map(a => {
       const q = qte(ag, a._id), p = prixAchat(a._id), s = seuil(a._id), v = Math.max(0,q) * p.v;
       valeur += v; unites += q;
-      return `<tr><td class="muted">${esc(a.ref)}</td><td>${esc(a.nom)}</td><td class="${cls(q,s)}">${fmtN(q)} ${esc(a.unite||'')}</td><td>${s ? fmtN(s) : '—'}</td><td>${fmtF(p.v)}${p.src==='tmmb' ? ' <span class="muted">(TMMB)</span>' : ''}</td><td>${fmtF(v)}</td></tr>`;
+      return `<tr><td>${a.ref ? `<span class="ref-tag" style="margin:0;">${esc(a.ref)}</span>` : ''}</td><td>${esc(a.nom)}</td><td class="${cls(q,s)}">${fmtN(q)} ${esc(a.unite||'')}</td><td>${s ? fmtN(s) : '—'}</td><td>${fmtF(p.v)}${p.src==='tmmb' ? ' <span class="muted">(TMMB)</span>' : ''}</td><td>${fmtF(v)}</td></tr>`;
     }).join('') || '<tr><td colspan="6" class="emp">Aucun article.</td></tr>';
   } else {
     document.getElementById('st-head').innerHTML = '<tr><th>Article</th>' + ags.map(g=>`<th>${esc(g.nom)}</th>`).join('') + '<th>Total</th><th>Valeur</th></tr>';
@@ -440,7 +442,7 @@ window.renderStock = function(){
       const s = seuil(a._id); let t = 0;
       const cells = ags.map(g => { const q = qte(g._id, a._id); t += q; tot.set(g._id, (tot.get(g._id)||0) + q); return `<td class="${cls(q,s)}">${fmtN(q)}</td>`; }).join('');
       const v = Math.max(0,t) * prixAchat(a._id).v; valeur += v; unites += t;
-      return `<tr><td>${esc(a.nom)} <span class="muted">${esc(a.ref||'')}</span></td>${cells}<td style="font-weight:700;">${fmtN(t)}</td><td>${fmtF(v)}</td></tr>`;
+      return `<tr><td>${esc(a.nom)} ${refTag(a)}</td>${cells}<td style="font-weight:700;">${fmtN(t)}</td><td>${fmtF(v)}</td></tr>`;
     }).join('') + (arts.length ? `<tr class="st-total"><td>TOTAL</td>${ags.map(g=>`<td>${fmtN(tot.get(g._id)||0)}</td>`).join('')}<td>${fmtN(unites)}</td><td>${fmtF(valeur)}</td></tr>` : '<tr><td colspan="9" class="emp">Aucun article.</td></tr>');
   }
   document.getElementById('st-kpi').innerHTML = `
@@ -466,7 +468,7 @@ window.renderArticles = function(){
   const arts = filtreArticles(document.getElementById('art-search').value);
   document.getElementById('art-body').innerHTML = arts.map(a => {
     const p = prixAchat(a._id), s = seuil(a._id), id = sid(a._id);
-    return `<tr><td class="muted">${esc(a.ref)}</td><td>${esc(a.nom)}</td><td>${esc(a.cat||'—')}</td><td>${esc(a.unite||'—')}</td>
+    return `<tr><td>${a.ref ? `<span class="ref-tag" style="margin:0;">${esc(a.ref)}</span>` : ''}</td><td>${esc(a.nom)}</td><td>${esc(a.cat||'—')}</td><td>${esc(a.unite||'—')}</td>
       <td>${fmtF(p.v)}${p.src==='tmmb' ? ' <span class="muted">(TMMB)</span>' : p.src==='aucun' ? ' <span class="muted">(non défini)</span>' : ''}</td>
       <td>${s ? fmtN(s) : '—'}</td><td>${fmtN(stockTotal(a._id))}</td>
       <td class="no-print">${id ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirArticle('${id}')">✏️ Régler</button>` : ''}</td></tr>`;
@@ -487,6 +489,8 @@ window.enregistrerArticle = async function(){
   if(pv !== '' && !prixValide(pv)) return notify("Prix d'achat invalide",'err');
   if(sv !== '' && !compteValide(sv)) return notify('Seuil invalide (nombre entier ≥ 0)','err');
   const data = { prixAchat: pv === '' ? null : Number(pv), seuil: sv === '' ? null : Number(sv), majLe: serverTimestamp(), majPar: user().name || '' };
+  // Prix saisi à la main : il ne dépend plus d'une entrée précise.
+  if(String(pv) !== String(STK.reglArt.get(id)?.prixAchat ?? '')){ data.prixMvtId = null; }
   try{
     await setDoc(doc(db,'stk_articles',id), data, { merge:true });
     STK.reglArt.set(id, { ...(STK.reglArt.get(id)||{}), ...data });
@@ -575,18 +579,26 @@ window.enregistrerEntree = () => avecVerrou('entree', 'btn-en', async () => {
   if(!confirm(`Enregistrer l'entrée de ${lignes.length} article(s) à ${nomAg(ag)}, pour ${fmtF(total)} ?`)) return;
   const groupe = doc(collection(db,'stk_mouvements')).id;
   const b = writeBatch(db);
+  const majPrix = [];
   for(const l of lignes){
+    const mvRef = doc(collection(db,'stk_mouvements'));
     b.set(doc(db,'stk_stock',cleStock(ag,l.articleId)), { agenceId:ag, articleId:l.articleId, qty:increment(l.qty), majLe:serverTimestamp() }, { merge:true });
-    b.set(doc(collection(db,'stk_mouvements')), { type:'entree', articleId:l.articleId, agenceId:ag, qty:l.qty, prixAchat:l.prix,
+    b.set(mvRef, { type:'entree', articleId:l.articleId, agenceId:ag, qty:l.qty, prixAchat:l.prix,
       fournisseur:fourn.slice(0,100), ref:ref.slice(0,60), note:note.slice(0,200), date, groupeId:groupe, ts:serverTimestamp(), ...auteur() });
-    b.set(doc(db,'stk_articles',l.articleId), { prixAchat:l.prix, majLe:serverTimestamp(), majPar:user().name||'' }, { merge:true });
+    // Le prix d'achat « actuel » de l'article = celui de l'entrée la plus récente (par date).
+    // Une entrée saisie en retard, datée plus tôt, ne l'écrase pas.
+    const r = STK.reglArt.get(l.articleId) || {};
+    if(!r.prixDate || date >= r.prixDate){
+      b.set(doc(db,'stk_articles',l.articleId), { prixAchat:l.prix, prixDate:date, prixMvtId:mvRef.id, majLe:serverTimestamp(), majPar:user().name||'' }, { merge:true });
+      majPrix.push({ articleId:l.articleId, prix:l.prix, prixDate:date, prixMvtId:mvRef.id });
+    }
   }
   try{
     await b.commit();
     for(const l of lignes){
       STK.stock.set(cleStock(ag,l.articleId), qte(ag,l.articleId) + l.qty);
-      STK.reglArt.set(l.articleId, { ...(STK.reglArt.get(l.articleId)||{}), prixAchat:l.prix });
     }
+    for(const p of majPrix) STK.reglArt.set(p.articleId, { ...(STK.reglArt.get(p.articleId)||{}), prixAchat:p.prix, prixDate:p.prixDate, prixMvtId:p.prixMvtId });
     document.getElementById('en-lignes').innerHTML = ''; ajouterLigne('en');
     ['en-fournisseur','en-ref','en-note'].forEach(id => document.getElementById(id).value = '');
     majTotalEntree(); chargerHistorique('entree','en-histo');
@@ -631,30 +643,105 @@ window.enregistrerTransfert = () => avecVerrou('transfert', 'btn-tr', async () =
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 
-// 30 derniers jours d'entrées ou de transferts, regroupés par opération.
-async function chargerHistorique(type, cible){
+// Historique des entrées (période choisie) ou des transferts (30 derniers jours), regroupés par opération.
+const _histoMv = new Map();
+function _ilYa(jours){ const d = new Date(); d.setDate(d.getDate()-jours); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+window.chargerHistorique = async function(type, cible){
   const el = document.getElementById(cible);
+  let du = _ilYa(30), au = aujourdhui();
+  if(type === 'entree'){
+    du = document.getElementById('enh-du').value || du;
+    au = document.getElementById('enh-au').value || au;
+    if(du > au) return notify('Période invalide','err');
+    document.getElementById('enh-aide').style.display = estAdmin() ? '' : 'none';
+  }
   el.innerHTML = '<div class="muted">Chargement…</div>';
-  const d = new Date(); d.setDate(d.getDate()-30);
-  const du = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   try{
-    const snap = await getDocs(query(collection(db,'stk_mouvements'), where('date','>=',du)));
+    const snap = await getDocs(query(collection(db,'stk_mouvements'), where('date','>=',du), where('date','<=',au)));
     const mv = _docs(snap).filter(m => m.type === type);
+    mv.forEach(m => _histoMv.set(m._id, m));
     const grp = new Map();
     for(const m of mv){ const k = m.groupeId || m._id; if(!grp.has(k)) grp.set(k, []); grp.get(k).push(m); }
     const ops = [...grp.values()].sort((a,b)=>String(b[0].date).localeCompare(String(a[0].date)) || ((b[0].ts?.seconds||0)-(a[0].ts?.seconds||0)));
-    if(!ops.length){ el.innerHTML = '<div class="muted">Aucune opération ces 30 derniers jours.</div>'; return; }
-    el.innerHTML = '<div class="tw"><table><thead><tr><th>Date</th><th>' + (type==='entree' ? 'Agence</th><th>Fournisseur</th><th>Réf.' : 'Départ</th><th>Arrivée</th><th>Note') + '</th><th>Articles</th>' + (type==='entree' ? '<th>Montant</th>' : '') + '<th>Par</th></tr></thead><tbody>' +
-      ops.map(o => {
-        const m = o[0];
-        const det = o.map(x=>`${esc(nomArt(x.articleId))} × ${fmtN(x.qty)}`).join('<br>');
+    if(!ops.length){ el.innerHTML = `<div class="muted">Aucune opération du ${dateFr(du)} au ${dateFr(au)}.</div>`; return; }
+    const admin = estAdmin();
+    let total = 0;
+    const lignes = ops.map(o => {
+      const m = o[0];
+      if(type === 'entree'){
+        const det = o.map(x => {
+          const id = sid(x._id);
+          const corr = Array.isArray(x.corrections) && x.corrections.length;
+          return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0;">${esc(nomArt(x.articleId))} × ${fmtN(x.qty)} @ ${fmtF(x.prixAchat)}`
+            + (corr ? ` <span class="tag-corrige" title="Prix d'origine : ${esc(fmtF(x.corrections[0].ancien))}">corrigé</span>` : '')
+            + (admin && id ? ` <button class="btn btn-ghost btn-xs no-print" onclick="ouvrirCorrectionPrix('${id}')">✏️ Prix</button>` : '') + '</div>';
+        }).join('');
         const mt = o.reduce((s,x)=>s+(Number(x.qty)||0)*(Number(x.prixAchat)||0),0);
-        return `<tr><td>${dateFr(m.date)}</td>` + (type==='entree'
-          ? `<td>${esc(nomAg(m.agenceId))}</td><td>${esc(m.fournisseur||'')}</td><td>${esc(m.ref||'')}</td><td style="font-size:12px;">${det}</td><td>${fmtF(mt)}</td>`
-          : `<td>${esc(nomAg(m.agenceId))}</td><td>${esc(nomAg(m.agenceDestId))}</td><td>${esc(m.note||'')}</td><td style="font-size:12px;">${det}</td>`) + `<td class="muted">${esc(m.auteurNom||'')}</td></tr>`;
-      }).join('') + '</tbody></table></div>';
+        total += mt;
+        return `<tr><td>${dateFr(m.date)}</td><td>${esc(nomAg(m.agenceId))}</td><td>${esc(m.fournisseur||'')}</td><td>${esc(m.ref||'')}</td><td style="font-size:12px;">${det}</td><td style="font-weight:700;">${fmtF(mt)}</td><td class="muted">${esc(m.auteurNom||'')}</td></tr>`;
+      }
+      const det = o.map(x=>`${esc(nomArt(x.articleId))} × ${fmtN(x.qty)}`).join('<br>');
+      return `<tr><td>${dateFr(m.date)}</td><td>${esc(nomAg(m.agenceId))}</td><td>${esc(nomAg(m.agenceDestId))}</td><td>${esc(m.note||'')}</td><td style="font-size:12px;">${det}</td><td class="muted">${esc(m.auteurNom||'')}</td></tr>`;
+    }).join('');
+    el.innerHTML = '<div class="tw"><table><thead><tr><th>Date</th><th>' + (type==='entree' ? 'Agence</th><th>Fournisseur</th><th>Réf.' : 'Départ</th><th>Arrivée</th><th>Note') + '</th><th>Articles</th>' + (type==='entree' ? '<th>Montant</th>' : '') + '<th>Par</th></tr></thead><tbody>'
+      + lignes + (type==='entree' ? `<tr class="st-total"><td colspan="5">TOTAL DES ACHATS SUR LA PÉRIODE</td><td>${fmtF(total)}</td><td></td></tr>` : '') + '</tbody></table></div>';
   }catch(e){ el.innerHTML = `<div class="alert alert-danger">${esc(msgErreur(e))}</div>`; }
-}
+};
+
+/* ═══════════════════════════════════════════════════
+   CORRECTION DU PRIX D'ACHAT D'UNE ENTRÉE (administrateur)
+   - seul le prix change : quantité et stock restent identiques ;
+   - l'ancien prix, l'auteur, la date et le motif sont gardés dans
+     « corrections » sur le mouvement (rien n'est effacé) ;
+   - si cette entrée est celle qui a fixé le prix d'achat actuel de
+     l'article, ce prix actuel est corrigé aussi (valeur du stock juste).
+═══════════════════════════════════════════════════ */
+let _mpId = null;
+window.ouvrirCorrectionPrix = function(id){
+  if(!estAdmin()) return notify("Réservé à l'administrateur",'err');
+  const m = _histoMv.get(id); if(!m || m.type !== 'entree') return;
+  _mpId = id;
+  document.getElementById('mp-info').innerHTML = `<b>${esc(nomArt(m.articleId))}</b> — ${fmtN(m.qty)} unité(s)<br>Entrée du ${dateFr(m.date)} · ${esc(nomAg(m.agenceId))} · ${esc(m.fournisseur||'')}${m.ref ? ' · ' + esc(m.ref) : ''}<br>Prix actuel : <b>${fmtF(m.prixAchat)}</b> — montant : <b>${fmtF((Number(m.qty)||0)*(Number(m.prixAchat)||0))}</b>`;
+  document.getElementById('mp-prix').value = m.prixAchat ?? '';
+  document.getElementById('mp-motif').value = '';
+  const h = Array.isArray(m.corrections) ? m.corrections : [];
+  document.getElementById('mp-histo').innerHTML = h.length ? 'Corrections précédentes :<br>' + h.map(c => `${esc(c.le ? new Date(c.le).toLocaleString('fr-FR') : '')} — ${esc(fmtF(c.ancien))} → ${esc(fmtF(c.nouveau))} par ${esc(c.par||'')} (${esc(c.motif||'')})`).join('<br>') : '';
+  majApercuPrix();
+  ouvrirModale('modal-prix');
+};
+window.majApercuPrix = function(){
+  const m = _histoMv.get(_mpId); const v = document.getElementById('mp-prix').value;
+  document.getElementById('mp-total').textContent = m && v !== '' && prixValide(v) ? fmtF((Number(m.qty)||0) * Number(v)) : '—';
+};
+window.enregistrerCorrectionPrix = () => avecVerrou('prix', 'btn-mp', async () => {
+  if(!estAdmin()) return notify("Réservé à l'administrateur",'err');
+  const m = _histoMv.get(_mpId); if(!m) return;
+  const v = document.getElementById('mp-prix').value.trim(), motif = document.getElementById('mp-motif').value.trim();
+  if(v === '' || !prixValide(v)) return notify('Prix invalide','err');
+  if(Number(v) === Number(m.prixAchat)) return notify('Le prix est identique','warn');
+  if(!motif) return notify('Indiquez le motif de la correction','err');
+  const ref = doc(db,'stk_mouvements',m._id);
+  const artRef = doc(db,'stk_articles',m.articleId);
+  try{
+    const res = await runTransaction(db, async (tx) => {
+      const s = await tx.get(ref);
+      if(!s.exists() || s.data().type !== 'entree') throw new Error('Entrée introuvable');
+      const a = await tx.get(artRef);
+      const cur = s.data();
+      const corrections = [...(Array.isArray(cur.corrections) ? cur.corrections : []),
+        { ancien:Number(cur.prixAchat)||0, nouveau:Number(v), par:user().name||'', parId:user().id||'', le:new Date().toISOString(), motif:motif.slice(0,200) }].slice(-20);
+      tx.update(ref, { prixAchat:Number(v), corrections, corrigeLe:serverTimestamp(), corrigePar:user().name||'' });
+      const prixActuelVientDeLa = a.exists() && a.data().prixMvtId === m._id;
+      if(prixActuelVientDeLa) tx.set(artRef, { prixAchat:Number(v), majLe:serverTimestamp(), majPar:user().name||'' }, { merge:true });
+      return { corrections, prixActuelVientDeLa };
+    });
+    Object.assign(m, { prixAchat:Number(v), corrections:res.corrections });
+    if(res.prixActuelVientDeLa) STK.reglArt.set(m.articleId, { ...(STK.reglArt.get(m.articleId)||{}), prixAchat:Number(v) });
+    fermerModale('modal-prix');
+    chargerHistorique('entree','en-histo');
+    notify('✅ Prix corrigé' + (res.prixActuelVientDeLa ? " — prix d'achat actuel de l'article mis à jour" : ''));
+  }catch(e){ notify(msgErreur(e),'err'); }
+});
 
 /* ═══════════════════════════════════════════════════
    INVENTAIRES
@@ -729,7 +816,7 @@ window.renderSaisieInventaire = function(){
     if(ecartsSeuls && !ecart) continue;
     const ec = ecart == null ? '<span class="muted">—</span>' : `<span class="${ecart>0?'ecart-pos':ecart<0?'ecart-neg':''}">${ecart>0?'+':''}${fmtN(ecart)}</span>`;
     const saisie = ro ? fmtN(compte) : `<input type="number" class="inv-input" min="0" step="1" value="${compte==null?'':esc(compte)}" data-art="${esc(a._id)}" oninput="saisirCompte(this)">`;
-    rows.push(`<tr><td>${esc(a.nom)} <span class="muted">${esc(a.ref||'')}</span></td><td>${fmtN(theo)}</td><td>${saisie}</td><td class="inv-ec">${ec}</td></tr>`);
+    rows.push(`<tr><td>${esc(a.nom)} ${refTag(a)}</td><td>${fmtN(theo)}</td><td>${saisie}</td><td class="inv-ec">${ec}</td></tr>`);
   }
   document.getElementById('inv-lignes').innerHTML = rows.join('') || '<tr><td colspan="4" class="emp">Aucun article.</td></tr>';
 };
@@ -1043,7 +1130,7 @@ function renderMouvements(){
   document.getElementById('mv-body').innerHTML = mv.slice(0,1000).map(m => {
     let qtxt = fmtN(m.qty), det = '';
     if(m.type === 'transfert'){ det = `${esc(nomAg(m.agenceId))} → ${esc(nomAg(m.agenceDestId))}`; if(ag) qtxt = (m.agenceId === ag ? '-' : '+') + fmtN(m.qty); }
-    else if(m.type === 'entree') det = esc(m.fournisseur||'') + (m.ref ? ' · ' + esc(m.ref) : '');
+    else if(m.type === 'entree') det = esc(m.fournisseur||'') + (m.ref ? ' · ' + esc(m.ref) : '') + (Array.isArray(m.corrections) && m.corrections.length ? ` <span class="tag-corrige">prix corrigé (origine ${esc(fmtF(m.corrections[0].ancien))})</span>` : '');
     else if(m.type === 'livraison') det = esc(m.produitNom||'');
     else if(m.type === 'inventaire') det = (m.inventaireType === 'depart' ? 'Inventaire de départ · ' : '') + `théorique ${fmtN(m.theorique)} → compté ${fmtN(m.compte)}`;
     return `<tr><td>${dateFr(m.date)}</td><td>${esc(TYPES[m.type]||m.type)}</td><td>${esc(nomArt(m.articleId))}</td><td>${esc(m.type==='transfert' ? '' : nomAg(m.agenceId))}</td>
@@ -1067,10 +1154,10 @@ function renderMouvements(){
 }
 ['mv-agence','mv-type'].forEach(id => document.getElementById(id).addEventListener('change', ()=>{ if(_mv.length || curPg==='mouvements') renderMouvements(); }));
 window.exportMouvementsCsv = function(){
-  const rows = [['Date','Type','Référence article','Article','Agence','Agence arrivée','Quantité',"Prix d'achat",'Fournisseur','N° facture','Produit livré','Théorique','Compté','Note','Par']];
+  const rows = [['Date','Type','Référence article','Article','Agence','Agence arrivée','Quantité',"Prix d'achat","Prix d'origine (si corrigé)",'Fournisseur','N° facture','Produit livré','Théorique','Compté','Note','Par']];
   for(const m of mouvementsFiltres()){
     const a = IDX.articles.get(m.articleId) || {};
-    rows.push([m.date, TYPES[m.type]||m.type, a.ref||'', a.nom||m.articleId, nomAg(m.agenceId), m.agenceDestId ? nomAg(m.agenceDestId) : '', m.qty, m.prixAchat ?? '', m.fournisseur||'', m.ref||'', m.produitNom||'', m.theorique ?? '', m.compte ?? '', m.note||'', m.auteurNom||'']);
+    rows.push([m.date, TYPES[m.type]||m.type, a.ref||'', a.nom||m.articleId, nomAg(m.agenceId), m.agenceDestId ? nomAg(m.agenceDestId) : '', m.qty, m.prixAchat ?? '', (Array.isArray(m.corrections) && m.corrections.length) ? m.corrections[0].ancien : '', m.fournisseur||'', m.ref||'', m.produitNom||'', m.theorique ?? '', m.compte ?? '', m.note||'', m.auteurNom||'']);
   }
   telechargerCsv('mouvements_' + document.getElementById('mv-du').value + '_' + document.getElementById('mv-au').value + '.csv', rows);
 };

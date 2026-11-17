@@ -1,12 +1,32 @@
 /* ═══════════════════════════════════════════════════
-   STOCK — compléments au style de la comptabilité (style.css inchangé)
+   STOCK — identité visuelle propre (entrepôt : graphite chaud, ambre,
+   ruban de balisage, étiquettes). Les couleurs de base sont dans
+   style.css (:root).
 ═══════════════════════════════════════════════════ */
+/* Ruban de balisage ambre/noir : signature du module Stock */
+.ruban{height:6px;background:repeating-linear-gradient(-45deg,var(--accent) 0 10px,#1a1205 10px 20px);}
+#sidebar .ruban{margin:-1px 0 0;}
+.auth-card{border-top:0;overflow:hidden;padding-top:0;}
+.auth-card .ruban{margin:0 -40px 32px;}
+.logo-area{position:relative;}
+.logo-name{font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px;}
+.logo-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:7px;background:var(--accent);color:#1a1205;font-weight:800;font-size:17px;margin-bottom:10px;box-shadow:0 0 0 3px rgba(245,158,11,0.18);}
+.logo-badge{border-radius:4px;font-family:'IBM Plex Mono',monospace;}
+.nav-item.active{box-shadow:inset 3px 0 0 var(--accent);}
+.topbar-title{font-family:'Space Grotesk',sans-serif;}
+.kpi-card{border-left:3px solid var(--border2);}
+.kpi-val{font-family:'Space Grotesk',sans-serif;}
+.kv-yellow{color:var(--warn);}
+.card-title,.sec-title,.md-title{font-family:'Space Grotesk',sans-serif;}
+/* Références d'articles en « étiquette » */
+.ref-tag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--accent);background:rgba(245,158,11,0.08);border:1px dashed rgba(245,158,11,0.35);border-radius:3px;padding:1px 5px;margin-left:4px;}
+.tag-corrige{font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(56,189,248,0.12);color:var(--accent3);border:1px solid rgba(56,189,248,0.3);}
 #toast.t-warn{border-color:rgba(251,146,60,0.4);color:var(--warn);}
 
 /* Lignes de saisie (entrées, transferts) */
 table.lignes{width:100%;border-collapse:collapse;margin-top:6px;}
 table.lignes th{text-align:left;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;padding:6px 8px;border-bottom:1px solid var(--border);}
-table.lignes td{padding:6px 8px;border-bottom:1px solid rgba(35,45,69,0.5);vertical-align:middle;}
+table.lignes td{padding:6px 8px;border-bottom:1px solid rgba(51,45,34,0.6);vertical-align:middle;}
 table.lignes .form-control{width:100%;font-size:13px;}
 table.lignes td.num{white-space:nowrap;font-weight:600;}
 
@@ -17,7 +37,7 @@ table.lignes td.num{white-space:nowrap;font-weight:600;}
 .ecart-neg{color:var(--red);font-weight:700;}
 .qte-bas{color:var(--red);font-weight:700;}
 .qte-neg{color:var(--red);font-weight:800;}
-.st-total td{font-weight:800;background:#0e1427;}
+.st-total td{font-weight:800;background:#1b1812;border-top:1px solid var(--border2);}
 .muted{color:var(--muted);font-size:11px;}
 .tag-sm{font-size:10px;padding:2px 7px;}
 
@@ -27,3 +47,4 @@ table.lignes td.num{white-space:nowrap;font-weight:600;}
   table.lignes td{display:block;border:none;padding:4px;}
   .form-row-3{grid-template-columns:1fr;}
 }
+.alert a,.card a{color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:2px;}

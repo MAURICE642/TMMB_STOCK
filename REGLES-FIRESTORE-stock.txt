@@ -29,7 +29,7 @@ avec ce bloc déjà inséré : vous pouvez l'utiliser directement.
       allow create, update: if isStock();
       allow delete: if isAdmin();
     }
-    // Journal des mouvements : on ajoute, on ne modifie ni ne supprime JAMAIS.
+    // Journal des mouvements : on ajoute, on ne supprime JAMAIS.
     match /stk_mouvements/{id} {
       allow read: if isStock();
       allow create: if isStock()
@@ -39,7 +39,12 @@ avec ce bloc déjà inséré : vous pouvez l'utiliser directement.
         && request.resource.data.qty is number
         && request.resource.data.date is string
         && request.resource.data.auteurId == request.auth.uid;
-      allow update, delete: if false;
+      // Seule exception : l'admin corrige le PRIX d'une entrée fournisseur.
+      // La quantité ne peut pas changer ; l'ancien prix reste dans « corrections ».
+      allow update: if isAdmin() && resource.data.type == 'entree'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prixAchat','corrections','corrigeLe','corrigePar'])
+        && request.resource.data.prixAchat is number && request.resource.data.prixAchat >= 0;
+      allow delete: if false;
     }
     // Inventaires : modifiables tant qu'ils ne sont pas validés.
     match /stk_inventaires/{id} {
