@@ -21,7 +21,7 @@
      Le gestionnaire de stock ne voit aucun prix ni aucune valeur dans
      l'application. Les prix et montants du module stock sont dans des
      collections que les règles Firestore réservent à l'administrateur.
-     ⚠️ Le prix d'achat « pa » des articles TMMB reste lisible par le
+     Le prix d'achat « pa » des articles TMMB reste lisible par le
      gestionnaire dans la base TMMB elle-même (règles de TMMB, inchangées).
 ═══════════════════════════════════════════════════ */
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -81,7 +81,7 @@ const estAdmin = () => user().role === 'admin';
 const auteur = () => ({ auteurId: user().id || '', auteurNom: user().name || '' });
 const nomArt = id => (IDX.articles.get(id) || {}).nom || '(article supprimé dans TMMB)';
 const nomLieu = id => id === GENERAL ? 'Stock général' : ((IDX.agences.get(id) || {}).nom || '(agence inconnue)');
-const lieuHtml = id => id === GENERAL ? '<span class="lieu-general">🏭 Stock général</span>' : esc(nomLieu(id));
+const lieuHtml = id => id === GENERAL ? '<span class="lieu-general"><svg class=i aria-hidden=true><use href=#i-box /></svg> Stock général</span>' : esc(nomLieu(id));
 const estLieu = id => id === GENERAL || IDX.agences.has(id);
 const qte = (lieu, art) => STK.stock.get(cleStock(lieu, art)) || 0;
 const articlesTries = () => [...TDB.articles].sort((a,b)=>String(a.nom||'').localeCompare(String(b.nom||''),'fr'));
@@ -106,7 +106,7 @@ async function avecVerrou(cle, btnId, fn){
   _verrous.add(cle);
   const b = btnId && document.getElementById(btnId);
   const txt = b && b.textContent;
-  if(b){ b.disabled = true; b.textContent = '⏳ Enregistrement…'; }
+  if(b){ b.disabled = true; b.textContent = 'Enregistrement…'; }
   try{ return await fn(); }
   finally{ _verrous.delete(cle); if(b){ b.disabled = false; b.textContent = txt; } }
 }
@@ -194,8 +194,8 @@ let _tSession = null, _tAvert = null;
 function _relancerSession(){
   if(!getCurrentUser()) return;
   clearTimeout(_tSession); clearTimeout(_tAvert);
-  _tAvert = setTimeout(()=>{ if(getCurrentUser()) notify('⚠️ Session inactive — déconnexion dans 2 minutes','warn'); }, SESSION_MS - 120000);
-  _tSession = setTimeout(()=>{ if(getCurrentUser()){ notify('🔒 Session expirée','err'); window.doLogout(true); } }, SESSION_MS);
+  _tAvert = setTimeout(()=>{ if(getCurrentUser()) notify('Session inactive — déconnexion dans 2 minutes','warn'); }, SESSION_MS - 120000);
+  _tSession = setTimeout(()=>{ if(getCurrentUser()){ notify('Session expirée','err'); window.doLogout(true); } }, SESSION_MS);
 }
 ['click','keydown','touchstart'].forEach(ev => document.addEventListener(ev, ()=>{ if(getCurrentUser()) _relancerSession(); }, {passive:true}));
 
@@ -223,14 +223,14 @@ window.doLogin = async function(){
   const att = _getAtt(email);
   if(att.until > now){
     const s = Math.ceil((att.until-now)/1000);
-    err.textContent = `🔒 Trop de tentatives — réessayez dans ${s>90 ? Math.ceil(s/60)+' min' : s+' s'}`;
+    err.textContent = `Trop de tentatives — réessayez dans ${s>90 ? Math.ceil(s/60)+' min' : s+' s'}`;
     err.style.display = 'block'; return;
   }
   const vs = await _lireVerrouServeur(email);
   if(vs && vs.count >= 5){
     const ws = vs.windowStart && vs.windowStart.toDate ? vs.windowStart.toDate() : new Date(vs.windowStart);
     const ecoule = Date.now() - ws.getTime();
-    if(ecoule < 60000){ err.textContent = `🔒 Trop de tentatives — réessayez dans ${Math.ceil((60000-ecoule)/1000)} s`; err.style.display = 'block'; return; }
+    if(ecoule < 60000){ err.textContent = `Trop de tentatives — réessayez dans ${Math.ceil((60000-ecoule)/1000)} s`; err.style.display = 'block'; return; }
   }
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('loading-screen').classList.remove('hidden');
@@ -253,10 +253,10 @@ window.doLogin = async function(){
       await _incVerrouServeur(email);
     }
     let msg = e.message || 'Connexion impossible.';
-    if(identifiants) msg = att.until > now ? '🔒 Trop de tentatives — compte bloqué temporairement' : `❌ Email ou mot de passe incorrect (${att.count}/5)`;
-    else if(e.code === 'auth/invalid-email') msg = '❌ Adresse email invalide.';
-    else if(e.code === 'auth/too-many-requests') msg = '🔒 Trop de tentatives — Firebase a bloqué temporairement ce compte.';
-    else if(e.code === 'auth/network-request-failed') msg = '📡 Pas de connexion internet.';
+    if(identifiants) msg = att.until > now ? 'Trop de tentatives — compte bloqué temporairement' : `Email ou mot de passe incorrect (${att.count}/5)`;
+    else if(e.code === 'auth/invalid-email') msg = 'Adresse email invalide.';
+    else if(e.code === 'auth/too-many-requests') msg = 'Trop de tentatives — Firebase a bloqué temporairement ce compte.';
+    else if(e.code === 'auth/network-request-failed') msg = 'Pas de connexion internet.';
     err.textContent = msg; err.style.display = 'block';
   }
 };
@@ -366,7 +366,7 @@ function demarrerApp(){
   const u = user();
   document.body.classList.toggle('role-admin', estAdmin());
   document.getElementById('user-avatar').textContent = String(u.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-  document.getElementById('user-badge-name').textContent = (u.name||'') + (estAdmin() ? ' 🛡️' : ' 📦');
+  document.getElementById('user-badge-name').textContent = (u.name||'') + (estAdmin() ? ' ' : ' ');
   appliquerMenu();
   construireOperations();
   remplirSelects();
@@ -390,7 +390,7 @@ function majBandeau(){
 // Remplit toutes les listes déroulantes de filtres (catégories, lieux, agences).
 function remplirSelects(){
   const optsAg = agencesTriees().map(a=>`<option value="${esc(a._id)}">${esc(a.nom||a._id)}${a.ville ? ' — '+esc(a.ville) : ''}</option>`).join('');
-  const optGen = `<option value="${GENERAL}">🏭 Stock général</option>`;
+  const optGen = `<option value="${GENERAL}">Stock général</option>`;
   const cats = [...new Set(TDB.articles.map(a => a.cat).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'fr'));
   const optsCat = '<option value="">Toutes les catégories</option>' + cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   const garder = (el, html) => { const v = el.value; el.innerHTML = html; if(v && [...el.options].some(o=>o.value===v)) el.value = v; };
@@ -408,7 +408,7 @@ window.syncNow = async function(){
     await chargerTout(); remplirSelects(); majBandeau();
     await relireLivraisons(false);
     renderPg(curPg);
-    notify('✅ Données actualisées');
+    notify('Données actualisées');
   }catch(e){ setSync(false); notify(msgErreur(e),'err'); }
 };
 
@@ -475,50 +475,139 @@ function lignesStockBas(){
   }
   return out.sort((x,y)=>(x.q - x.s) - (y.q - y.s));
 }
+/* Petites briques d'affichage (v7) */
+const ico = n => `<svg class=i aria-hidden=true><use href=#i-${n} /></svg>`;
+function pillStock(q, s){
+  if(q < 0) return '<span class="pill p-neg">Négatif</span>';
+  if(q === 0) return '<span class="pill p-zero">Rupture</span>';
+  if(s > 0 && q < s) return '<span class="pill p-low">Stock bas</span>';
+  return '<span class="pill p-ok">En stock</span>';
+}
+function barreNiveau(q, s){
+  // Remplissage par rapport à 2 × le seuil (le seuil est au milieu de la barre).
+  if(!(s > 0)) return '<span class="muted">—</span>';
+  const pct = Math.max(0, Math.min(100, Math.round(q / (2*s) * 100)));
+  const coul = q < 0 ? 'var(--red)' : q < s ? 'var(--accent)' : 'var(--green)';
+  return `<div class="niveau"><div class="piste"><i style="width:${pct}%;background:${coul}"></i></div><small>${fmtN(s)}</small></div>`;
+}
+window.voirStockBas = function(){ go('articles'); const e = document.getElementById('art-etat'); if(e){ e.value = 'bas'; renderArticles(); } };
+window.commencerInventaire = function(lieu){
+  go('inventaires');
+  const s = document.getElementById('inv-new-lieu'); if(s && estLieu(lieu)){ s.value = lieu; s.focus(); }
+};
+// Demandes ouvertes : lues une seule fois par session pour la vue d'ensemble
+// (la page Demandes les relit et met ce compteur à jour).
+let _dmOuvertesLues = false;
+async function demandesOuvertes(){
+  if(!_dmOuvertesLues){
+    try{
+      const sn = await getDocs(query(collection(db,'demandesLivraison'), where('statut','in',['en_attente','partielle'])));
+      const m = new Map(_demandes.map(d => [d._id, d])); _docs(sn).forEach(d => m.set(d._id, d));
+      _demandes = [...m.values()]; _dmOuvertesLues = true; majBadgeDemandes();
+    }catch(e){ return null; }
+  }
+  return _demandes.filter(d => d.statut === 'en_attente' || d.statut === 'partielle');
+}
+function ilYaJours(dateIso){
+  if(!/^\d{4}-\d{2}-\d{2}/.test(String(dateIso||''))) return '';
+  const j = Math.round((new Date(aujourdhui()) - new Date(String(dateIso).slice(0,10))) / 86400000);
+  return j <= 0 ? "aujourd'hui" : j === 1 ? 'hier' : `il y a ${j} jours`;
+}
+
 async function renderDashboard(){
   const admin = estAdmin();
-  const sansDepart = lieux().filter(l => !STK.inventaires.some(i => i.agenceId === l._id && i.statut === 'valide'));
-  let html = '';
-  if(!STK.jourJ) html += `<div class="alert alert-warn">📅 Le <b>jour J</b> n'est pas défini : les livraisons TMMB ne sont pas encore déduites du stock. ${admin ? '<a href="#" onclick="go(\'reglages\');return false;">Le définir</a>' : "Demandez à l'administrateur de le définir."}</div>`;
-  if(sansDepart.length) html += `<div class="alert alert-info">📋 ${sansDepart.length} lieu(x) sans inventaire de départ : ${sansDepart.map(l=>esc(l.nom)).join(', ')}. <a href="#" onclick="go('inventaires');return false;">Faire l'inventaire</a></div>`;
-  document.getElementById('dash-alerte-config').innerHTML = html;
+  const valide = l => STK.inventaires.find(i => i.agenceId === l._id && i.statut === 'valide' && i.type === 'depart')
+                   || STK.inventaires.find(i => i.agenceId === l._id && i.statut === 'valide');
 
-  let uGen = 0, uAg = 0, vGen = 0, vAg = 0;
+  /* 1. Mise en route (remplace les bandeaux d'alerte ; disparaît quand tout est fait) */
+  const etapes = [];
+  const gen = lieux()[0];
+  const ig = valide(gen);
+  etapes.push({ ok:!!ig, titre:'Inventaire de départ du stock général',
+    detail: ig ? `Validé le ${dateFr(ig.date)}${ig.rapportNumero ? ' · rapport ' + esc(ig.rapportNumero) : ''}` : "Tant qu'il manque, le stock général part de zéro",
+    action: ig ? '' : (admin ? `<button class="btn btn-ghost btn-sm" onclick="commencerInventaire('${GENERAL}')">Commencer</button>` : '<span class="muted">Réservé à l\'administrateur</span>') });
+  etapes.push({ ok:!!STK.jourJ, titre:'Jour J défini',
+    detail: STK.jourJ ? `Les livraisons TMMB sont déduites depuis le ${dateFr(STK.jourJ)}` : "Les livraisons TMMB ne sont pas encore déduites du stock",
+    action: STK.jourJ ? '' : (admin ? `<button class="btn btn-ghost btn-sm" onclick="go('reglages')">Définir</button>` : '<span class="muted">À définir par l\'administrateur</span>') });
+  for(const g of agencesTriees()){
+    const iv = valide(g), id = sid(g._id);
+    etapes.push({ ok:!!iv, titre:'Inventaire de départ — ' + esc(g.nom),
+      detail: iv ? `Validé le ${dateFr(iv.date)}${iv.rapportNumero ? ' · rapport ' + esc(iv.rapportNumero) : ''}` : "Tant qu'il manque, le stock de l'agence part de zéro",
+      action: iv || !id ? '' : `<button class="btn btn-ghost btn-sm" onclick="commencerInventaire('${id}')">Commencer</button>` });
+  }
+  const faites = etapes.filter(e => e.ok).length;
+  document.getElementById('dash-alerte-config').innerHTML = faites === etapes.length ? '' : `
+    <div class="card" style="margin-bottom:18px;">
+      <div class="card-title">Mise en route <span class="muted" style="font-size:12.5px;font-weight:500;">${faites} étape${faites>1?'s':''} sur ${etapes.length}</span>
+        <span class="prog" style="margin-left:auto;"><i style="width:${Math.round(faites/etapes.length*100)}%"></i></span></div>
+      <div class="todo">${etapes.map((e,k) => `<div class="rangee"><div class="etape${e.ok?' ok':''}">${e.ok ? ico('check') : k+1}</div>
+        <div class="t"><b>${e.titre}</b><div>${e.detail}</div></div>${e.action}</div>`).join('')}</div>
+    </div>`;
+
+  /* 2. Indicateurs orientés action */
+  let uGen = 0, uAg = 0, vGen = 0, vAg = 0, nGen = 0;
   for(const a of TDB.articles){
     const g = qte(GENERAL, a._id), ag = stockAgences(a._id);
-    uGen += g; uAg += ag;
+    uGen += g; uAg += ag; if(g > 0) nGen++;
     if(admin){ vGen += Math.max(0,g) * prixTmmb(a._id); for(const x of TDB.agences) vAg += Math.max(0, qte(x._id, a._id)) * prixTmmb(a._id); }
   }
   const bas = lignesStockBas();
   const neg = [...STK.stock.values()].filter(q => q < 0).length;
+  const sousSeuil = bas.filter(r => r.q >= 0).length;
+  const surveiller = sousSeuil + neg;
   document.getElementById('dash-kpi').innerHTML = `
-    <div class="kpi-card"><div class="kpi-lbl">Stock général</div><div class="kpi-val kv-yellow">${fmtN(uGen)}</div><div class="kpi-sub">unités${admin ? ' · ' + fmtF(vGen) : ''}</div></div>
-    <div class="kpi-card"><div class="kpi-lbl">Stock des agences</div><div class="kpi-val kv-blue">${fmtN(uAg)}</div><div class="kpi-sub">unités${admin ? ' · ' + fmtF(vAg) : ''}</div></div>
-    <div class="kpi-card"><div class="kpi-lbl">Stock bas / négatif</div><div class="kpi-val ${bas.length||neg?'kv-red':'kv-green'}">${bas.length} / ${neg}</div><div class="kpi-sub">article(s) × lieu</div></div>
-    <div class="kpi-card"><div class="kpi-lbl">Livraisons à vérifier</div><div class="kpi-val ${STK.aVerifier.length?'kv-yellow':'kv-green'}">${STK.aVerifier.length}</div><div class="kpi-sub">non déduites automatiquement</div></div>`
-    + (admin ? `<div class="kpi-card admin-seul"><div class="kpi-lbl">💰 Valeur totale du stock</div><div class="kpi-val kv-green">${fmtF(vGen+vAg)}</div><div class="kpi-sub">au prix d'achat TMMB</div></div>
-    <div class="kpi-card admin-seul"><div class="kpi-lbl">💰 Achats du mois</div><div class="kpi-val kv-purple" id="dash-achats">…</div><div class="kpi-sub">entrées fournisseurs</div></div>` : '');
-
-  document.getElementById('dash-lieux').innerHTML = '<table class="mini-table" style="width:100%;">' + lieux().map(l => {
-    let u = 0, v = 0; for(const a of TDB.articles){ const q = qte(l._id, a._id); u += q; if(admin) v += Math.max(0,q) * prixTmmb(a._id); }
-    return `<tr><td>${lieuHtml(l._id)}</td><td style="text-align:right;">${fmtN(u)} unités</td>${admin ? `<td style="text-align:right;font-weight:700;">${fmtF(v)}</td>` : ''}</tr>`;
-  }).join('') + '</table>';
-
-  const basRows = bas.map(r => `<tr><td>${esc(r.a.nom)}</td><td class="muted">${lieuHtml(r.l._id)}</td><td class="qte-bas" style="text-align:right;">${fmtN(r.q)} / ${fmtN(r.s)}</td></tr>`);
-  document.getElementById('dash-bas').innerHTML = bas.length ? '<table class="mini-table" style="width:100%;"><tbody id="dash-bas-body"></tbody></table>' : '<div class="muted">Aucun article sous son seuil.</div>';
-  if(bas.length) paginer('dash-bas-body', basRows, 3, '');
+    <div class="kpi-card kpi-lien" onclick="go('general')"><div class="kpi-lbl">${ico('box')} Stock général</div><div class="kpi-val">${fmtN(uGen)}</div><div class="kpi-sub">unités · <b>${nGen} article${nGen>1?'s':''}</b> en stock${admin ? ' · ' + fmtF(vGen) : ''}</div></div>
+    <div class="kpi-card kpi-lien" onclick="go('agences')"><div class="kpi-lbl">${ico('store')} Stock des agences</div><div class="kpi-val">${fmtN(uAg)}</div><div class="kpi-sub">unités dans <b>${TDB.agences.length} agence${TDB.agences.length>1?'s':''}</b>${admin ? ' · ' + fmtF(vAg) : ''}</div></div>
+    <div class="kpi-card kpi-lien" onclick="voirStockBas()"><div class="kpi-lbl"><span class="point" style="background:${surveiller?'var(--red)':'var(--green)'}"></span> À surveiller</div><div class="kpi-val ${surveiller?'kv-red':'kv-green'}">${surveiller}</div><div class="kpi-sub"><b>${sousSeuil}</b> sous le seuil · <b>${neg}</b> négatif${neg>1?'s':''}</div></div>
+    <div class="kpi-card kpi-lien" onclick="go('demandes')"><div class="kpi-lbl"><span class="point" style="background:var(--accent)"></span> Demandes en attente</div><div class="kpi-val" id="dash-dm">…</div><div class="kpi-sub" id="dash-dm-sub">&nbsp;</div></div>`;
 
   const d = STK.derniereLecture;
-  document.getElementById('dash-liv').innerHTML = !STK.jourJ ? '<div class="muted">Jour J non défini.</div>'
-    : d ? `<div style="font-size:13px;">${esc(d.heure)} — ${d.lues} livraison(s) relue(s), <b>${d.deduites}</b> déduite(s), ${d.aVerifier} à vérifier${d.erreur ? ` · <span class="kv-red">${esc(d.erreur)}</span>` : ''}.</div>`
-    : '<div class="muted">Lecture en cours…</div>';
+  const livTxt = !STK.jourJ ? '<span class="muted">Jour J non défini</span>'
+    : d ? `${d.deduites} déduite${d.deduites>1?'s':''}${STK.aVerifier.length ? ` · <span style="color:var(--accent)">${STK.aVerifier.length} à vérifier</span>` : ''}${d.erreur ? ` · <span class="kv-red">${esc(d.erreur)}</span>` : ''}`
+    : 'Lecture en cours…';
+  const livSub = d ? `dernière lecture à ${esc(d.heure)} · ${d.lues} relue${d.lues>1?'s':''}` : (STK.aVerifier.length ? `${STK.aVerifier.length} à vérifier` : '&nbsp;');
+  const kLiv = `<div class="kpi-card kpi-lien" onclick="go('livraisons')"><div class="kpi-lbl">${ico('list')} Livraisons TMMB</div><div class="kpi-val" style="font-size:17px;margin-top:10px;">${livTxt}</div><div class="kpi-sub">${livSub}</div></div>`;
+  const k2 = document.getElementById('dash-kpi2');
+  k2.className = 'kpi-row dash-kpi2' + (admin ? ' k2-admin' : '');
+  k2.innerHTML = (admin ? `<div class="kpi-card admin-seul"><div class="kpi-lbl">${ico('coin')} Valeur totale du stock</div><div class="kpi-val">${fmtF(vGen+vAg)}</div><div class="kpi-sub">au prix d'achat TMMB</div></div>
+    <div class="kpi-card admin-seul"><div class="kpi-lbl">${ico('in')} Achats du mois</div><div class="kpi-val" id="dash-achats">…</div><div class="kpi-sub" id="dash-achats-sub">entrées fournisseurs</div></div>` : '') + kLiv;
 
+  /* 3. Répartition par lieu */
+  const parLieu = lieux().map(l => {
+    let u = 0, v = 0; for(const a of TDB.articles){ const q = qte(l._id, a._id); u += q; if(admin) v += Math.max(0,q) * prixTmmb(a._id); }
+    return { l, u, v };
+  });
+  const maxU = Math.max(1, ...parLieu.map(x => x.u));
+  document.getElementById('dash-lieux').innerHTML = `<table class="mini-table"><thead><tr><th>Lieu</th><th>Part</th><th class="r">Unités</th>${admin ? '<th class="r">Valeur</th>' : ''}</tr></thead><tbody>` +
+    parLieu.map(({l,u,v}) => `<tr><td>${lieuHtml(l._id)}</td><td style="width:40%;"><div class="niveau"><div class="piste"><i style="width:${Math.max(0,Math.round(u/maxU*100))}%;background:${l._id===GENERAL?'var(--accent)':'var(--blue)'}"></i></div></div></td>
+      <td class="r">${fmtN(u)}</td>${admin ? `<td class="r">${fmtF(v)}</td>` : ''}</tr>`).join('') + '</tbody></table>';
+
+  /* 4. À réapprovisionner */
+  const lien = document.getElementById('dash-bas-lien'); if(lien) lien.textContent = bas.length ? `Tout voir (${bas.length})` : '';
+  const basRows = bas.map(r => `<tr><td><span class="nom-art">${esc(r.a.nom)}</span> ${refTag(r.a)}</td><td class="muted">${lieuHtml(r.l._id)}</td>
+    <td class="r"><span class="pill ${r.q < 0 ? 'p-neg' : 'p-low'}">${fmtN(r.q)} / ${fmtN(r.s)}</span></td></tr>`);
+  document.getElementById('dash-bas').innerHTML = bas.length
+    ? '<table class="mini-table"><thead><tr><th>Article</th><th>Lieu</th><th class="r">Stock / seuil</th></tr></thead><tbody id="dash-bas-body"></tbody></table>'
+    : '<div class="muted" style="font-size:13px;">Aucun article sous son seuil.</div>';
+  if(bas.length) paginer('dash-bas-body', basRows, 3, '');
+
+  /* Lectures différées (une seule fois pour les demandes) */
+  demandesOuvertes().then(liste => {
+    const v = document.getElementById('dash-dm'), sb = document.getElementById('dash-dm-sub'); if(!v) return;
+    if(!liste){ v.textContent = '—'; sb.textContent = 'lecture impossible'; return; }
+    const att = liste.filter(x => x.statut === 'en_attente'), part = liste.length - att.length;
+    v.textContent = att.length;
+    const ancienne = att.map(x => x.dateCreation).filter(Boolean).sort()[0];
+    sb.innerHTML = (ancienne ? `la plus ancienne : <b>${esc(ilYaJours(ancienne))}</b>` : 'aucune') + (part ? ` · ${part} partielle${part>1?'s':''}` : '');
+  });
   if(admin){
     try{
       const debut = aujourdhui().slice(0,8) + '01';
       const s = await getDocs(query(collection(db,'stk_prixEntrees'), where('date','>=',debut)));
-      const tot = _docs(s).filter(p=>!p.annule).reduce((x,p)=>x+(Number(p.qty)||0)*(Number(p.prixAchat)||0),0);
+      const ps = _docs(s).filter(p=>!p.annule);
+      const tot = ps.reduce((x,p)=>x+(Number(p.qty)||0)*(Number(p.prixAchat)||0),0);
       const el = document.getElementById('dash-achats'); if(el) el.textContent = fmtF(tot);
+      const sb = document.getElementById('dash-achats-sub'); if(sb) sb.innerHTML = `<b>${ps.length}</b> ligne${ps.length>1?'s':''} d'entrée ce mois-ci`;
     }catch(e){ const el = document.getElementById('dash-achats'); if(el) el.textContent = '—'; }
   }
 }
@@ -526,25 +615,37 @@ async function renderDashboard(){
 /* ═══════════════════════════════════════════════════
    ÉTAT DU STOCK GÉNÉRAL
 ═══════════════════════════════════════════════════ */
+/* Onglets d'état avec compteurs (la liste déroulante cachée garde l'état choisi) */
+const ETATS = [['','Tous'],['stock','En stock'],['bas','Stock bas'],['zero','Rupture'],['neg','Négatif']];
+function dessinerOnglets(pre, compte, rendu){
+  const sel = document.getElementById(pre + '-etat'), box = document.getElementById(pre + '-onglets'); if(!sel || !box) return;
+  box.innerHTML = ETATS.map(([v,lib]) => `<button type="button" role="tab" class="onglet${sel.value===v?' on':''}" data-etat="${v}" aria-selected="${sel.value===v}">${lib} <span class="c">${fmtN(compte(v))}</span></button>`).join('');
+  box.querySelectorAll('.onglet').forEach(b => b.onclick = () => { sel.value = b.dataset.etat; rendu(); });
+}
+const valeurCellule = v => `<td class="r">${fmtF(v)}</td>`;
+
 window.renderGeneral = function(){
   const admin = estAdmin();
   const etat = document.getElementById('gen-etat').value;
-  const arts = filtrerArticles(document.getElementById('gen-search').value, document.getElementById('gen-cat').value)
-    .filter(a => etatOk(etat, qte(GENERAL, a._id), seuil(a._id)));
+  const base = filtrerArticles(document.getElementById('gen-search').value, document.getElementById('gen-cat').value);
+  dessinerOnglets('gen', e => base.filter(a => etatOk(e, qte(GENERAL, a._id), seuil(a._id))).length, renderGeneral);
+  const arts = base.filter(a => etatOk(etat, qte(GENERAL, a._id), seuil(a._id)));
   let unites = 0, valeur = 0;
-  document.getElementById('gen-head').innerHTML = `<tr><th>Réf.</th><th>Article</th><th>Catégorie</th><th>Quantité</th><th>Seuil</th><th>Agences</th>${admin ? '<th>Prix d\'achat</th><th>Valeur</th>' : ''}</tr>`;
+  document.getElementById('gen-head').innerHTML = `<tr><th>Réf.</th><th>Article</th><th>Catégorie</th><th>État</th><th>Niveau / seuil</th><th class="r">Quantité</th><th class="r">Agences</th>${admin ? '<th class="r">Prix d\'achat</th><th class="r">Valeur</th>' : ''}</tr>`;
   const rows = arts.map(a => {
     const q = qte(GENERAL, a._id), s = seuil(a._id);
     unites += q; const v = Math.max(0,q) * prixTmmb(a._id); valeur += v;
-    return `<tr><td>${a.ref ? `<span class="ref-tag" style="margin:0;">${esc(a.ref)}</span>` : ''}</td><td>${esc(a.nom)}</td><td class="muted">${esc(a.cat||'—')}</td>
-      <td class="${clsQte(q,s)}">${fmtN(q)} ${esc(a.unite||'')}</td><td>${s ? fmtN(s) : '—'}</td><td class="muted">${fmtN(stockAgences(a._id))}</td>
-      ${admin ? `<td>${fmtF(prixTmmb(a._id))}</td><td>${fmtF(v)}</td>` : ''}</tr>`;
+    return `<tr><td>${a.ref ? `<span class="ref-tag">${esc(a.ref)}</span>` : ''}</td><td class="nom-art">${esc(a.nom)}</td><td class="muted">${esc(a.cat||'—')}</td>
+      <td>${pillStock(q,s)}</td><td>${barreNiveau(q,s)}</td>
+      <td class="r ${clsQte(q,s)}">${fmtN(q)} <span class="muted">${esc(a.unite||'')}</span></td><td class="r muted">${fmtN(stockAgences(a._id))}</td>
+      ${admin ? `<td class="r">${fmtF(prixTmmb(a._id))}</td>${valeurCellule(v)}` : ''}</tr>`;
   });
-  paginer('gen-body', rows, admin ? 8 : 6, 'Aucun article ne correspond aux filtres.');
+  paginer('gen-body', rows, admin ? 9 : 7, 'Aucun article ne correspond aux filtres.');
+  document.getElementById('gen-foot').innerHTML = arts.length ? `<tr><td colspan="5">${fmtN(arts.length)} article${arts.length>1?'s':''}</td><td class="r">${fmtN(unites)}</td><td></td>${admin ? `<td></td><td class="r">${fmtF(valeur)}</td>` : ''}</tr>` : '';
   document.getElementById('gen-kpi').innerHTML = `
-    <div class="kpi-card"><div class="kpi-lbl">Articles affichés</div><div class="kpi-val kv-blue">${arts.length}</div></div>
-    <div class="kpi-card"><div class="kpi-lbl">Unités au stock général</div><div class="kpi-val kv-yellow">${fmtN(unites)}</div></div>
-    ${admin ? `<div class="kpi-card"><div class="kpi-lbl">💰 Valeur</div><div class="kpi-val kv-green">${fmtF(valeur)}</div></div>`
+    <div class="kpi-card"><div class="kpi-lbl">Articles affichés</div><div class="kpi-val">${arts.length}</div></div>
+    <div class="kpi-card"><div class="kpi-lbl">Unités au stock général</div><div class="kpi-val">${fmtN(unites)}</div></div>
+    ${admin ? `<div class="kpi-card"><div class="kpi-lbl">${ico('coin')} Valeur</div><div class="kpi-val">${fmtF(valeur)}</div></div>`
             : `<div class="kpi-card"><div class="kpi-lbl">En alerte</div><div class="kpi-val kv-red">${arts.filter(a=>seuil(a._id)>0 && qte(GENERAL,a._id)<seuil(a._id)).length}</div></div>`}`;
 };
 
@@ -555,32 +656,38 @@ window.renderAgences = function(){
   const admin = estAdmin();
   const ag = document.getElementById('ag-agence').value, etat = document.getElementById('ag-etat').value;
   const ags = ag ? [IDX.agences.get(ag)].filter(Boolean) : agencesTriees();
-  const arts = filtrerArticles(document.getElementById('ag-search').value, document.getElementById('ag-cat').value)
-    .filter(a => !etat || ags.some(g => etatOk(etat, qte(g._id, a._id), seuil(a._id))));
+  const base = filtrerArticles(document.getElementById('ag-search').value, document.getElementById('ag-cat').value);
+  const garde = e => a => !e || ags.some(g => etatOk(e, qte(g._id, a._id), seuil(a._id)));
+  dessinerOnglets('ag', e => base.filter(garde(e)).length, renderAgences);
+  const arts = base.filter(garde(etat));
   let unites = 0, valeur = 0, rows;
   if(ag){
-    document.getElementById('ag-head').innerHTML = `<tr><th>Réf.</th><th>Article</th><th>Catégorie</th><th>Quantité</th><th>Seuil</th>${admin ? '<th>Prix d\'achat</th><th>Valeur</th>' : ''}</tr>`;
+    document.getElementById('ag-head').innerHTML = `<tr><th>Réf.</th><th>Article</th><th>Catégorie</th><th>État</th><th>Niveau / seuil</th><th class="r">Quantité</th>${admin ? '<th class="r">Prix d\'achat</th><th class="r">Valeur</th>' : ''}</tr>`;
     rows = arts.map(a => {
       const q = qte(ag, a._id), s = seuil(a._id), v = Math.max(0,q) * prixTmmb(a._id);
       unites += q; valeur += v;
-      return `<tr><td>${a.ref ? `<span class="ref-tag" style="margin:0;">${esc(a.ref)}</span>` : ''}</td><td>${esc(a.nom)}</td><td class="muted">${esc(a.cat||'—')}</td><td class="${clsQte(q,s)}">${fmtN(q)} ${esc(a.unite||'')}</td><td>${s ? fmtN(s) : '—'}</td>${admin ? `<td>${fmtF(prixTmmb(a._id))}</td><td>${fmtF(v)}</td>` : ''}</tr>`;
+      return `<tr><td>${a.ref ? `<span class="ref-tag">${esc(a.ref)}</span>` : ''}</td><td class="nom-art">${esc(a.nom)}</td><td class="muted">${esc(a.cat||'—')}</td><td>${pillStock(q,s)}</td><td>${barreNiveau(q,s)}</td>
+        <td class="r ${clsQte(q,s)}">${fmtN(q)} <span class="muted">${esc(a.unite||'')}</span></td>${admin ? `<td class="r">${fmtF(prixTmmb(a._id))}</td>${valeurCellule(v)}` : ''}</tr>`;
     });
-    paginer('ag-body', rows, admin ? 7 : 5, 'Aucun article ne correspond aux filtres.');
+    paginer('ag-body', rows, admin ? 8 : 6, 'Aucun article ne correspond aux filtres.');
+    document.getElementById('ag-foot').innerHTML = arts.length ? `<tr><td colspan="5">${fmtN(arts.length)} article${arts.length>1?'s':''}</td><td class="r">${fmtN(unites)}</td>${admin ? `<td></td><td class="r">${fmtF(valeur)}</td>` : ''}</tr>` : '';
   } else {
-    document.getElementById('ag-head').innerHTML = '<tr><th>Article</th>' + ags.map(g=>`<th>${esc(g.nom)}</th>`).join('') + `<th>Total agences</th>${admin ? '<th>Valeur</th>' : ''}</tr>`;
+    document.getElementById('ag-head').innerHTML = '<tr><th>Article</th>' + ags.map(g=>`<th class="r">${esc(g.nom)}</th>`).join('') + `<th class="r">Total agences</th>${admin ? '<th class="r">Valeur</th>' : ''}</tr>`;
+    const totAg = ags.map(() => 0);
     rows = arts.map(a => {
       const s = seuil(a._id); let t = 0, v = 0;
-      const cells = ags.map(g => { const q = qte(g._id, a._id); t += q; v += Math.max(0,q) * prixTmmb(a._id); return `<td class="${clsQte(q,s)}">${fmtN(q)}</td>`; }).join('');
+      const cells = ags.map((g,k) => { const q = qte(g._id, a._id); t += q; totAg[k] += q; v += Math.max(0,q) * prixTmmb(a._id); return `<td class="r ${clsQte(q,s)}">${fmtN(q)}</td>`; }).join('');
       unites += t; valeur += v;
-      return `<tr><td>${esc(a.nom)} ${refTag(a)}</td>${cells}<td style="font-weight:700;">${fmtN(t)}</td>${admin ? `<td>${fmtF(v)}</td>` : ''}</tr>`;
+      return `<tr><td><span class="nom-art">${esc(a.nom)}</span> ${refTag(a)}</td>${cells}<td class="r" style="font-weight:700;">${fmtN(t)}</td>${admin ? valeurCellule(v) : ''}</tr>`;
     });
     paginer('ag-body', rows, ags.length + (admin ? 3 : 2), 'Aucun article ne correspond aux filtres.');
+    document.getElementById('ag-foot').innerHTML = arts.length ? `<tr><td>${fmtN(arts.length)} article${arts.length>1?'s':''}</td>${totAg.map(x=>`<td class="r">${fmtN(x)}</td>`).join('')}<td class="r">${fmtN(unites)}</td>${admin ? `<td class="r">${fmtF(valeur)}</td>` : ''}</tr>` : '';
   }
   document.getElementById('ag-kpi').innerHTML = `
-    <div class="kpi-card"><div class="kpi-lbl">Articles affichés</div><div class="kpi-val kv-blue">${arts.length}</div></div>
-    <div class="kpi-card"><div class="kpi-lbl">Unités en agence${ag ? '' : 's'}</div><div class="kpi-val kv-purple">${fmtN(unites)}</div></div>
-    ${admin ? `<div class="kpi-card"><div class="kpi-lbl">💰 Valeur</div><div class="kpi-val kv-green">${fmtF(valeur)}</div></div>`
-            : `<div class="kpi-card"><div class="kpi-lbl">Agences</div><div class="kpi-val kv-yellow">${ags.length}</div></div>`}`;
+    <div class="kpi-card"><div class="kpi-lbl">Articles affichés</div><div class="kpi-val">${arts.length}</div></div>
+    <div class="kpi-card"><div class="kpi-lbl">Unités en agence${ag ? '' : 's'}</div><div class="kpi-val">${fmtN(unites)}</div></div>
+    ${admin ? `<div class="kpi-card"><div class="kpi-lbl">${ico('coin')} Valeur</div><div class="kpi-val">${fmtF(valeur)}</div></div>`
+            : `<div class="kpi-card"><div class="kpi-lbl">Agences</div><div class="kpi-val">${ags.length}</div></div>`}`;
 };
 
 window.exportStockCsv = function(quoi){
@@ -612,7 +719,7 @@ window.renderArticles = function(){
     const id = sid(a._id), s = seuil(a._id);
     return `<tr><td>${a.ref ? `<span class="ref-tag" style="margin:0;">${esc(a.ref)}</span>` : ''}</td><td>${esc(a.nom)}</td><td class="muted">${esc(a.cat||'—')}</td><td>${esc(a.unite||'—')}</td>
       ${admin ? `<td>${fmtF(prixTmmb(a._id))}</td>` : ''}<td>${s ? fmtN(s) : '—'}</td><td>${fmtN(qte(GENERAL,a._id))}</td><td>${fmtN(stockAgences(a._id))}</td><td style="font-weight:700;">${fmtN(stockTotal(a._id))}</td>
-      <td class="no-print">${id ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirArticle('${id}')">✏️ Seuil</button>` : ''}</td></tr>`;
+      <td class="no-print">${id ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirArticle('${id}')"><svg class=i aria-hidden=true><use href=#i-edit /></svg> Seuil</button>` : ''}</td></tr>`;
   });
   paginer('art-body', rows, admin ? 10 : 9, 'Aucun article ne correspond aux filtres.');
 };
@@ -620,7 +727,7 @@ window.ouvrirArticle = function(id){
   const a = IDX.articles.get(id); if(!a) return;
   _artEdite = id;
   const r = STK.reglArt.get(id) || {};
-  document.getElementById('ma-titre').textContent = '🏷️ ' + (a.nom || id);
+  document.getElementById('ma-titre').textContent = '' + (a.nom || id);
   document.getElementById('ma-seuil').value = r.seuil ?? '';
   ouvrirModale('modal-article');
 };
@@ -632,7 +739,7 @@ window.enregistrerArticle = async function(){
   try{
     await setDoc(doc(db,'stk_articles',id), data, { merge:true });
     STK.reglArt.set(id, { ...(STK.reglArt.get(id)||{}), ...data });
-    fermerModale('modal-article'); renderArticles(); notify('✅ Seuil enregistré');
+    fermerModale('modal-article'); renderArticles(); notify('Seuil enregistré');
   }catch(e){ notify(msgErreur(e),'err'); }
 };
 
@@ -642,10 +749,10 @@ window.enregistrerArticle = async function(){
    Chaque opération est écrite en une fois (tout ou rien).
 ═══════════════════════════════════════════════════ */
 const OPS = {
-  entree:    { type:'entree',    titre:"📥 Nouvelle entrée fournisseur — au stock général", source:null,      dest:'general', histo:'🧾 Entrées enregistrées' },
-  dispatch:  { type:'transfert', titre:'🚚 Dispatch du stock général vers une agence',      source:'general', dest:'agence',  histo:'🧾 Dispatchs enregistrés' },
-  transfert: { type:'transfert', titre:'🔁 Transfert entre lieux (agence → agence, ou retour au stock général)', source:'agence', dest:'lieu', histo:'🧾 Transferts enregistrés' },
-  sortie:    { type:'sortie',    titre:'📤 Autre sortie de stock (perte, usage interne, retour fournisseur…)',  source:'lieu',    dest:null,      histo:'🧾 Sorties enregistrées' }
+  entree:    { type:'entree',    titre:"<svg class=i aria-hidden=true><use href=#i-in /></svg> Nouvelle entrée fournisseur — au stock général", source:null,      dest:'general', histo:'<svg class=i aria-hidden=true><use href=#i-list /></svg> Entrées enregistrées' },
+  dispatch:  { type:'transfert', titre:'<svg class=i aria-hidden=true><use href=#i-truck /></svg> Dispatch du stock général vers une agence',      source:'general', dest:'agence',  histo:'<svg class=i aria-hidden=true><use href=#i-list /></svg> Dispatchs enregistrés' },
+  transfert: { type:'transfert', titre:'<svg class=i aria-hidden=true><use href=#i-swap /></svg> Transfert entre lieux (agence → agence, ou retour au stock général)', source:'agence', dest:'lieu', histo:'<svg class=i aria-hidden=true><use href=#i-list /></svg> Transferts enregistrés' },
+  sortie:    { type:'sortie',    titre:'<svg class=i aria-hidden=true><use href=#i-out /></svg> Autre sortie de stock (perte, usage interne, retour fournisseur…)',  source:'lieu',    dest:null,      histo:'<svg class=i aria-hidden=true><use href=#i-list /></svg> Sorties enregistrées' }
 };
 const PAGE_OP = { entrees:'entree', dispatch:'dispatch', transferts:'transfert', sorties:'sortie' };
 const _histoMv = new Map();      // id mouvement → mouvement (historiques chargés)
@@ -674,10 +781,10 @@ function construireOperations(){
           <div class="form-group"><div class="form-label">${op === 'sortie' ? 'Précision (obligatoire pour « Autre »)' : 'Note'}</div><input type="text" class="form-control" id="${op}-note" maxlength="200"></div>
         </div>
         <table class="lignes"><thead id="${op}-lhead"></thead><tbody id="${op}-lignes"></tbody></table>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-          <button class="btn btn-ghost btn-sm" onclick="ajouterLigne('${op}')">+ Ajouter un article</button>
+        <div style="margin-top:10px;"><button type="button" class="btn btn-ghost btn-sm" onclick="ajouterLigne('${op}')">${ico('plus')} Ajouter un article</button></div>
+        <div class="op-actions">
           <div style="flex:1;text-align:right;font-weight:700;" id="${op}-total"></div>
-          <button class="btn btn-success" id="btn-${op}" onclick="enregistrerOp('${op}')">✅ Enregistrer</button>
+          <button class="btn btn-primary" id="btn-${op}" onclick="enregistrerOp('${op}')"><svg class=i aria-hidden=true><use href=#i-check /></svg> Enregistrer</button>
         </div>
       </div>
       <div class="card">
@@ -687,11 +794,11 @@ function construireOperations(){
           <button class="btn btn-ghost btn-sm no-print" onclick="chargerHistorique('${op}')">Afficher la période</button>
           ${op !== 'entree' ? `<select class="form-control f-sm" id="${op}-hlieu" onchange="renderHistorique('${op}')"></select>` : ''}
           ${op === 'sortie' ? `<select class="form-control f-sm" id="sortie-hmotif" onchange="renderHistorique('sortie')"><option value="">Tous les motifs</option>${Object.entries(MOTIFS_SORTIE).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('')}</select>` : ''}
-          ${op === 'entree' ? `<input type="text" class="form-control f-sm" id="entree-hfourn" placeholder="🔍 Fournisseur ou n° facture…" oninput="renderHistorique('entree')">` : ''}
-          <input type="text" class="form-control f-sm" id="${op}-hart" placeholder="🔍 Article…" oninput="renderHistorique('${op}')">
+          ${op === 'entree' ? `<input type="text" class="cherche form-control f-sm" id="entree-hfourn" placeholder="Fournisseur ou n° facture…" oninput="renderHistorique('entree')">` : ''}
+          <input type="text" class="cherche form-control f-sm" id="${op}-hart" placeholder="Article…" oninput="renderHistorique('${op}')">
           <select class="form-control f-sm" id="${op}-hstat" onchange="renderHistorique('${op}')"><option value="actives">Sans les annulées</option><option value="toutes">Avec les annulées</option><option value="annulees">Annulées seulement</option></select>
         </div>
-        <div class="muted admin-seul" style="margin-bottom:8px;">🛡️ Administrateur : ✏️ corrige une ligne (quantité, date, note${op === 'entree' ? ', fournisseur, n° facture' : ''}), 🚫 l'annule${op === 'entree' ? ', 💲 corrige son prix d\'achat' : ''}. Le stock est recalculé et l'historique est gardé.</div>
+        <div class="muted admin-seul" style="margin-bottom:8px;"><svg class=i aria-hidden=true><use href=#i-shield /></svg> Administrateur : <svg class=i aria-hidden=true><use href=#i-edit /></svg> corrige une ligne (quantité, date, note${op === 'entree' ? ', fournisseur, n° facture' : ''}), <svg class=i aria-hidden=true><use href=#i-ban /></svg> l'annule${op === 'entree' ? ', <svg class=i aria-hidden=true><use href=#i-coin /></svg> corrige son prix d\'achat' : ''}. Le stock est recalculé et l'historique est gardé.</div>
         <div class="tw"><table><thead id="${op}-hhead"></thead><tbody id="${op}-histo"></tbody></table></div>
       </div>`;
     ajouterLigne(op);
@@ -710,7 +817,7 @@ function remplirSelectsOperations(optsAg, optGen){
   garder('sortie-hlieu', '<option value="">Tous les lieux</option>' + optGen + optsAg);
   for(const op of Object.keys(OPS)){
     const tb = document.getElementById(op + '-lignes');
-    if(tb) tb.querySelectorAll('.l-art').forEach(s => { const v = s.value, c = s.closest('td').querySelector('.l-cherche'); s.innerHTML = optionsArticles(c ? c.value : ''); s.value = v; });
+    if(tb) tb.querySelectorAll('.l-art').forEach(s => { const v = s.value; s.innerHTML = optionsArticles(''); s.value = v; });
     majEnteteLignes(op);
   }
 }
@@ -729,7 +836,7 @@ function destOp(op){
 const avecPrixEcran = op => op === 'entree' && estAdmin();
 function majEnteteLignes(op){
   const h = document.getElementById(op + '-lhead'); if(!h) return;
-  h.innerHTML = `<tr><th>Article</th>${OPS[op].source ? '<th>Disponible</th>' : ''}<th>Quantité</th>${avecPrixEcran(op) ? '<th>Prix TMMB</th><th>Total</th>' : ''}<th></th></tr>`;
+  h.innerHTML = `<tr><th>Article</th>${OPS[op].source ? '<th class="r">Disponible</th>' : ''}<th>Quantité</th>${avecPrixEcran(op) ? '<th class="r">Prix TMMB</th><th class="r">Total</th>' : ''}<th></th></tr>`;
 }
 // Recherche sans tenir compte des majuscules ni des accents (« fer » trouve « Fér… »).
 const _norm = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -750,37 +857,100 @@ function optionsArticles(terme){
   const tete = terme ? `<option value="">— ${liste.length} article(s) trouvé(s) —</option>` : '<option value="">— Article —</option>';
   return tete + liste.map(a=>`<option value="${esc(a._id)}">${a.ref ? esc(a.ref)+' — ' : ''}${esc(a.nom)}</option>`).join('');
 }
-// Filtre la liste d'une ligne pendant la frappe ; un seul résultat → il est choisi.
+/* Choix d'article dans une ligne (v7) : on tape une référence ou un nom, une liste
+   s'ouvre (réf., nom, stock) ; ↑ ↓ pour se déplacer, Entrée pour choisir, Échap pour fermer.
+   La liste <select class="l-art"> reste dans la page (cachée) : c'est elle qui garde l'article
+   choisi, lue à l'enregistrement comme avant. */
+const COMBO_MAX = 50;
+const libArt = a => (a.ref ? a.ref + ' — ' : '') + (a.nom || '');
+function stockCombo(op, id){
+  const src = sourceOp(op);
+  if(src) return `${fmtN(qte(src, id))} dispo`;
+  return `${fmtN(qte(GENERAL, id))} au général`;
+}
+function dessinerCombo(inp, op){
+  const td = inp.closest('td'), box = td.querySelector('.combo-liste'), sel = td.querySelector('.l-art');
+  const liste = articlesCherches(inp.value);
+  const vis = liste.slice(0, COMBO_MAX);
+  inp._res = vis.map(a => a._id);
+  if(inp._pos == null || inp._pos >= vis.length) inp._pos = 0;
+  box.innerHTML = vis.length
+    ? vis.map((a,k) => `<div class="combo-opt${k===inp._pos?' on':''}${a._id===sel.value?' choisi':''}" role="option" data-id="${esc(a._id)}"><span class="ref">${esc(a.ref||'')}</span><span>${esc(a.nom||'')}</span><span class="st">${stockCombo(op, a._id)}</span></div>`).join('')
+      + (liste.length > COMBO_MAX ? `<div class="combo-vide">… et ${fmtN(liste.length - COMBO_MAX)} autre(s) : précisez la recherche</div>` : '')
+    : `<div class="combo-vide">Aucun article ne correspond à « ${esc(inp.value)} »</div>`;
+  box.querySelectorAll('.combo-opt').forEach(o => o.onmousedown = ev => { ev.preventDefault(); choisirArticleLigne(inp, op, o.dataset.id); });
+  box.hidden = false;
+  inp.setAttribute('aria-expanded','true');
+  const on = box.querySelector('.combo-opt.on'); if(on) on.scrollIntoView({ block:'nearest' });
+}
+function fermerCombo(inp){
+  const box = inp.closest('td').querySelector('.combo-liste'); if(box) box.hidden = true;
+  inp.setAttribute('aria-expanded','false');
+}
+function choisirArticleLigne(inp, op, id){
+  const sel = inp.closest('td').querySelector('.l-art');
+  const a = IDX.articles.get(id); if(!a) return;
+  const avant = sel.value;
+  sel.value = id;
+  inp.value = libArt(a);
+  inp.classList.add('choisi'); inp.classList.remove('l-cherche-vide');
+  fermerCombo(inp);
+  if(sel.value !== avant) majLignes(op);
+  const q = inp.closest('tr').querySelector('.l-qte'); if(q) q.focus();
+}
+// Pendant la frappe : la liste se filtre ; un seul résultat → il est choisi tout seul.
 window.chercherArticleLigne = function(inp, op){
   const sel = inp.closest('td').querySelector('.l-art');
   const avant = sel.value;
-  sel.innerHTML = optionsArticles(inp.value);
-  const ids = [...sel.options].map(o => o.value).filter(Boolean);
-  if(ids.includes(avant)) sel.value = avant;
+  inp.classList.remove('choisi'); inp._pos = 0;
+  const liste = articlesCherches(inp.value);
+  const ids = liste.map(a => a._id);
+  if(!inp.value.trim()) sel.value = '';
   else if(ids.length === 1) sel.value = ids[0];
-  else sel.value = '';
+  else if(!ids.includes(avant)) sel.value = '';
   inp.classList.toggle('l-cherche-vide', !!inp.value.trim() && !ids.length);
+  dessinerCombo(inp, op);
   if(sel.value !== avant) majLignes(op);
 };
-// Entrée : choisit le premier article trouvé et passe à la quantité.
 window.toucheChercheLigne = function(ev, inp, op){
+  const box = inp.closest('td').querySelector('.combo-liste');
+  const ouvert = box && !box.hidden;
+  if(ev.key === 'ArrowDown' || ev.key === 'ArrowUp'){
+    ev.preventDefault();
+    if(!ouvert){ dessinerCombo(inp, op); return; }
+    const n = (inp._res || []).length; if(!n) return;
+    inp._pos = ((inp._pos || 0) + (ev.key === 'ArrowDown' ? 1 : -1) + n) % n;
+    dessinerCombo(inp, op); return;
+  }
+  if(ev.key === 'Escape'){ if(ouvert){ ev.preventDefault(); fermerCombo(inp); } return; }
   if(ev.key !== 'Enter') return;
   ev.preventDefault();
-  const tr = inp.closest('tr'), sel = tr.querySelector('.l-art');
-  if(!sel.value){ const o = [...sel.options].find(x => x.value); if(o){ sel.value = o.value; majLignes(op); } }
-  if(sel.value) tr.querySelector('.l-qte').focus();
+  const sel = inp.closest('td').querySelector('.l-art');
+  const res = inp._res || articlesCherches(inp.value).slice(0, COMBO_MAX).map(a => a._id);
+  const id = ouvert && res.length ? res[inp._pos || 0] : (sel.value || res[0]);
+  if(id) choisirArticleLigne(inp, op, id);
   else notify('Aucun article ne correspond à « ' + inp.value + ' »','warn');
+};
+window.focusChercheLigne = function(inp){ if(inp.classList.contains('choisi')) inp.select(); };
+window.quitterChercheLigne = function(inp){
+  setTimeout(() => {
+    fermerCombo(inp);
+    // Texte laissé sans choix : on remet le libellé de l'article choisi (s'il y en a un).
+    const sel = inp.closest('td') && inp.closest('td').querySelector('.l-art');
+    if(sel && sel.value && !inp.classList.contains('choisi')){ const a = IDX.articles.get(sel.value); if(a){ inp.value = libArt(a); inp.classList.add('choisi'); } }
+  }, 120);
 };
 window.ajouterLigne = function(op){
   const tb = document.getElementById(op + '-lignes');
   if(tb.children.length >= MAX_LIGNES) return notify(`Maximum ${MAX_LIGNES} articles par opération`,'warn');
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td class="l-art-td"><input type="search" class="form-control l-cherche" placeholder="🔍 Référence ou nom…" autocomplete="off" oninput="chercherArticleLigne(this,'${op}')" onkeydown="toucheChercheLigne(event,this,'${op}')">`
-    + `<select class="form-control l-art" onchange="majLignes('${op}')">${optionsArticles()}</select></td>`
-    + (OPS[op].source ? '<td class="num l-dispo">—</td>' : '')
-    + `<td><input type="number" class="form-control l-qte" min="1" step="1" placeholder="Quantité" oninput="majLignes('${op}')"></td>`
-    + (avecPrixEcran(op) ? '<td class="num l-prix">—</td><td class="num l-total">—</td>' : '')
-    + `<td><button class="btn btn-ghost btn-xs" onclick="this.closest('tr').remove();majLignes('${op}')">✕</button></td>`;
+  tr.innerHTML = `<td class="l-art-td combo"><input type="search" class="cherche form-control l-cherche" placeholder="Référence ou nom…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-label="Article (référence ou nom)" oninput="chercherArticleLigne(this,'${op}')" onkeydown="toucheChercheLigne(event,this,'${op}')" onfocus="focusChercheLigne(this)" onblur="quitterChercheLigne(this)">`
+    + `<div class="combo-liste" role="listbox" hidden></div>`
+    + `<select class="form-control l-art" tabindex="-1" aria-hidden="true" onchange="majLignes('${op}')">${optionsArticles()}</select></td>`
+    + (OPS[op].source ? '<td class="num l-dispo r">—</td>' : '')
+    + `<td><input type="number" class="form-control l-qte" min="1" step="1" inputmode="numeric" placeholder="Quantité" oninput="majLignes('${op}')"></td>`
+    + (avecPrixEcran(op) ? '<td class="num l-prix r">—</td><td class="num l-total r">—</td>' : '')
+    + `<td><button type="button" class="btn btn-ghost btn-xs" title="Retirer la ligne" aria-label="Retirer la ligne" onclick="this.closest('tr').remove();majLignes('${op}')">${ico('x')}</button></td>`;
   tb.appendChild(tr);
   majEnteteLignes(op);
   if(tb.children.length > 1){ const c = tr.querySelector('.l-cherche'); if(c) c.focus(); }
@@ -790,7 +960,7 @@ window.majLignes = function(op){
   document.querySelectorAll(`#${op}-lignes tr`).forEach(tr => {
     const a = tr.querySelector('.l-art').value, q = Number(tr.querySelector('.l-qte').value) || 0;
     const d = tr.querySelector('.l-dispo');
-    if(d){ const dispo = src && a ? qte(src, a) : null; d.textContent = dispo == null ? '—' : fmtN(dispo); d.className = 'num l-dispo' + (dispo != null && q > dispo ? ' qte-neg' : ''); }
+    if(d){ const dispo = src && a ? qte(src, a) : null; d.textContent = dispo == null ? '—' : fmtN(dispo); d.className = 'num l-dispo r' + (dispo != null && q > dispo ? ' qte-neg' : ''); }
     if(avecPrixEcran(op)){
       const p = a ? prixTmmb(a) : 0;
       tr.querySelector('.l-prix').textContent = a ? fmtF(p) : '—';
@@ -884,7 +1054,7 @@ window.enregistrerOp = (op) => avecVerrou('op:'+op, 'btn-'+op, async () => {
     document.getElementById(op + '-lignes').innerHTML = ''; ajouterLigne(op);
     [op+'-note','entree-fourn','entree-ref'].forEach(id => { const el = document.getElementById(id); if(el && (id.startsWith(op) || op === 'entree')) el.value = ''; });
     majLignes(op); chargerHistorique(op);
-    notify('✅ Enregistré');
+    notify('Enregistré');
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 
@@ -942,7 +1112,7 @@ window.renderHistorique = function(op){
     const m = g[0];
     const lignes = g.map(x => ligneOperation(op, x, admin)).join('');
     const actives = g.filter(x => !x.annule);
-    const toutAnnuler = admin && actives.length > 1 ? `<div class="no-print" style="margin-top:4px;"><button class="btn btn-ghost btn-xs" onclick="ouvrirAnnulation('${sid(m.groupeId || m._id)}','${op}')">🚫 Annuler toute l'opération</button></div>` : '';
+    const toutAnnuler = admin && actives.length > 1 ? `<div class="no-print" style="margin-top:4px;"><button class="btn btn-ghost btn-xs" onclick="ouvrirAnnulation('${sid(m.groupeId || m._id)}','${op}')"><svg class=i aria-hidden=true><use href=#i-ban /></svg> Annuler toute l'opération</button></div>` : '';
     const auteurTxt = `<td class="muted">${esc(m.auteurNom||'')}</td>`;
     if(op === 'entree'){
       const mt = actives.reduce((s,x)=>{ const p = _prixMap.get(x._id); return s + (p ? (Number(x.qty)||0) * (Number(p.prixAchat)||0) : 0); }, 0);
@@ -962,9 +1132,28 @@ function ligneOperation(op, x, admin){
   const p = op === 'entree' && admin ? _prixMap.get(x._id) : null;
   const prixTxt = p ? ` @ ${fmtF(p.prixAchat)}${Array.isArray(p.corrections) && p.corrections.length ? ' <span class="tag-corrige">prix corrigé</span>' : ''}${!Number(p.prixAchat) ? ' <span class="tag-annule">prix à 0</span>' : ''}` : '';
   const tags = (x.annule ? ` <span class="tag-annule" title="${esc((x.annulePar||'') + ' — ' + (x.motifAnnulation||''))}">annulé</span>` : '') + (modifie ? ' <span class="tag-modifie">modifié</span>' : '');
-  const actions = admin && id && !x.annule ? ` <span class="no-print"><button class="btn btn-ghost btn-xs" title="Corriger" onclick="ouvrirCorrection('${id}')">✏️</button><button class="btn btn-ghost btn-xs" title="Annuler" onclick="ouvrirAnnulation('${id}','${op}',true)">🚫</button>${op === 'entree' ? `<button class="btn btn-ghost btn-xs" title="Corriger le prix" onclick="ouvrirCorrectionPrix('${id}')">💲</button>` : ''}</span>` : '';
+  const actions = admin && id && !x.annule ? ` <span class="kebab-wrap no-print"><button type="button" class="kebab" title="Actions" aria-label="Actions sur cette ligne" aria-haspopup="menu" onclick="basculerMenu(this,event)">${ico('dots')}</button><div class="kmenu" role="menu" hidden>`
+    + `<button type="button" role="menuitem" onclick="fermerMenus();ouvrirCorrection('${id}')">${ico('edit')} Corriger la ligne</button>`
+    + (op === 'entree' ? `<button type="button" role="menuitem" onclick="fermerMenus();ouvrirCorrectionPrix('${id}')">${ico('coin')} Corriger le prix</button>` : '')
+    + `<button type="button" role="menuitem" class="dan" onclick="fermerMenus();ouvrirAnnulation('${id}','${op}',true)">${ico('ban')} Annuler la ligne</button></div></span>` : '';
   return `<div class="op-ligne ${x.annule ? 'op-annulee' : ''}"><span class="op-txt">${esc(nomArt(x.articleId))} × ${fmtN(qteAffichee(x))}${prixTxt}</span>${tags}${actions}</div>`;
 }
+
+/* Menu ⋯ : placé en position fixe pour ne pas être coupé par le tableau */
+window.fermerMenus = function(){ document.querySelectorAll('.kmenu').forEach(m => { m.hidden = true; }); };
+window.basculerMenu = function(btn, ev){
+  if(ev) ev.stopPropagation();
+  const m = btn.parentElement.querySelector('.kmenu'); if(!m) return;
+  const ouvrir = m.hidden; fermerMenus(); if(!ouvrir) return;
+  m.hidden = false; m.style.position = 'fixed';
+  const r = btn.getBoundingClientRect(), w = m.offsetWidth || 210, h = m.offsetHeight || 120;
+  m.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px';
+  m.style.top = (r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+  const b = m.querySelector('button'); if(b) b.focus();
+};
+document.addEventListener('click', ev => { if(!ev.target.closest('.kebab-wrap')) fermerMenus(); });
+document.addEventListener('keydown', ev => { if(ev.key === 'Escape') fermerMenus(); });
+document.addEventListener('scroll', () => fermerMenus(), true);
 
 /* ═══════════════════════════════════════════════════
    CORRECTION ET ANNULATION (administrateur)
@@ -980,7 +1169,7 @@ window.ouvrirCorrection = function(id){
   const m = _histoMv.get(id); if(!m || m.annule || !TYPES_CORRIGEABLES.includes(m.type)) return;
   _mcId = id;
   const quoi = m.type === 'entree' ? 'Entrée fournisseur' : m.type === 'sortie' ? 'Sortie (' + (MOTIFS_SORTIE[m.motifSortie]||'') + ')' : 'Transfert';
-  document.getElementById('mc-titre').textContent = '✏️ Corriger — ' + quoi;
+  document.getElementById('mc-titre').textContent = 'Corriger — ' + quoi;
   document.getElementById('mc-info').innerHTML = `<b>${esc(nomArt(m.articleId))}</b><br>${m.type === 'transfert' ? `${lieuHtml(m.agenceId)} → ${lieuHtml(m.agenceDestId)}` : lieuHtml(m.agenceId)} · saisi par ${esc(m.auteurNom||'')}`;
   document.getElementById('mc-qty').value = qteAffichee(m);
   document.getElementById('mc-date').value = m.date || '';
@@ -1038,7 +1227,7 @@ window.enregistrerCorrection = () => avecVerrou('corr', 'btn-mc', async () => {
     Object.assign(m0, res.maj, { modifieLe:null });
     fermerModale('modal-corr');
     rechargerApresAdmin();
-    notify('✅ Correction enregistrée');
+    notify('Correction enregistrée');
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 
@@ -1052,7 +1241,7 @@ window.ouvrirAnnulation = function(cle, op, uneLigne){
   document.getElementById('mn-info').innerHTML = `${ms.length > 1 ? `<b>Toute l'opération</b> (${ms.length} lignes) :<br>` : ''}` +
     ms.map(m => `${esc(nomArt(m.articleId))} × ${fmtN(qteAffichee(m))} — ${m.type === 'transfert' ? `${lieuHtml(m.agenceId)} → ${lieuHtml(m.agenceDestId)}` : lieuHtml(m.agenceId)} — ${dateFr(m.date)}`).join('<br>');
   document.getElementById('mn-motif').value = '';
-  if(ms.some(m => m.demandeId)) document.getElementById('mn-info').innerHTML += '<div class="alert alert-warn" style="margin-top:8px;">⚠️ Cette sortie servait une demande d\'agence : le statut de la demande dans TMMB ne sera pas modifié.</div>';
+  if(ms.some(m => m.demandeId)) document.getElementById('mn-info').innerHTML += '<div class="alert alert-warn" style="margin-top:8px;"><svg class=i aria-hidden=true><use href=#i-alert /></svg> Cette sortie servait une demande d\'agence : le statut de la demande dans TMMB ne sera pas modifié.</div>';
   ouvrirModale('modal-annul');
 };
 window.confirmerAnnulation = () => avecVerrou('annul', 'btn-mn', async () => {
@@ -1083,7 +1272,7 @@ window.confirmerAnnulation = () => avecVerrou('annul', 'btn-mn', async () => {
     res.majs.forEach(([id, maj]) => { const m = _histoMv.get(id); if(m) Object.assign(m, maj); const p = _prixMap.get(id); if(p) p.annule = true; });
     fermerModale('modal-annul');
     rechargerApresAdmin();
-    notify(`✅ ${res.majs.length} ligne(s) annulée(s), stock rétabli`);
+    notify(`${res.majs.length} ligne(s) annulée(s), stock rétabli`);
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 function rechargerApresAdmin(){
@@ -1133,7 +1322,7 @@ window.enregistrerCorrectionPrix = () => avecVerrou('prix', 'btn-mp', async () =
     Object.assign(p, { prixAchat:Number(v), corrections });
     fermerModale('modal-prix');
     rechargerApresAdmin();
-    notify('✅ Prix corrigé');
+    notify('Prix corrigé');
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 
@@ -1170,14 +1359,14 @@ window.renderInventaires = function(){
     const id = sid(i._id), nb = i.statut === 'valide' ? (i.lignes||[]).length : Object.keys(i.comptes||{}).length;
     const annule = i.statut === 'annule';
     const ouvrable = id && !annule && (i.statut === 'valide' || peutInventorier(i.agenceId));
-    const btnAnnuler = id && estAdmin() && i.statut === 'brouillon' ? ` <button class="btn btn-ghost btn-xs" onclick="ouvrirAnnulationInventaire('${id}')">🚫 Annuler</button>` : '';
+    const btnAnnuler = id && estAdmin() && i.statut === 'brouillon' ? ` <button class="btn btn-ghost btn-xs" onclick="ouvrirAnnulationInventaire('${id}')"><svg class=i aria-hidden=true><use href=#i-ban /></svg> Annuler</button>` : '';
     return `<tr><td>${dateFr(i.date)}</td><td>${lieuHtml(i.agenceId)}</td>
       <td>${i.type==='depart' ? '<span class="tag tag-purple tag-sm">Départ</span>' : '<span class="tag tag-blue tag-sm">Périodique</span>'}</td>
       <td>${i.statut==='valide' ? '<span class="tag tag-green tag-sm">Validé</span>' : annule ? `<span class="tag-annule" title="${esc(i.motifAnnulation||'')}">Annulé</span>` : '<span class="tag tag-warn tag-sm">En cours</span>'}</td>
       <td>${fmtN(nb)}</td><td>${i.statut==='valide' ? fmtN(i.nbEcarts||0) : '—'}</td>
       <td class="muted">${annule ? `${esc(i.annulePar||'')}<div style="font-size:11px;">annulé : « ${esc(i.motifAnnulation||'')} »</div>` : esc(i.validePar || i.creePar || '')}</td>
       <td>${i.rapportId && sid(i.rapportId) ? `<a href="#" onclick="voirRapport('${sid(i.rapportId)}');return false;">${esc(i.rapportNumero||'Voir')}</a>` : '—'}</td>
-      <td class="no-print">${ouvrable ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirInventaire('${id}')">${i.statut==='valide' ? '👁️ Voir' : '✏️ Continuer'}</button>` : ''}${btnAnnuler}</td></tr>`;
+      <td class="no-print">${ouvrable ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirInventaire('${id}')">${i.statut==='valide' ? '<svg class=i aria-hidden=true><use href=#i-eye /></svg> Voir' : '<svg class=i aria-hidden=true><use href=#i-edit /></svg> Continuer'}</button>` : ''}${btnAnnuler}</td></tr>`;
   });
   paginer('inv-body', rows, 9, "Aucun inventaire. Commencez par l'inventaire de départ de chaque lieu.");
 };
@@ -1246,7 +1435,7 @@ window.confirmerAnnulationInventaire = () => avecVerrou('annul-inv', 'btn-mi', a
     });
     const i = STK.inventaires.find(x => x._id === id); if(i) Object.assign(i, maj, { annuleLe:null });
     fermerModale('modal-annul-inv');
-    notify("✅ Inventaire annulé — vous pouvez en commencer un nouveau pour ce lieu");
+    notify("Inventaire annulé — vous pouvez en commencer un nouveau pour ce lieu");
     renderInventaires();
   }catch(e){ notify(msgErreur(e),'err'); }
 });
@@ -1307,7 +1496,7 @@ window.enregistrerBrouillon = async function(){
   try{
     await updateDoc(doc(db,'stk_inventaires',_inv._id), { comptes:c, majLe:serverTimestamp() });
     const i = STK.inventaires.find(x=>x._id===_inv._id); if(i) i.comptes = c;
-    notify('💾 Brouillon enregistré');
+    notify('Brouillon enregistré');
   }catch(e){ notify(msgErreur(e),'err'); }
 };
 window.validerInventaire = () => avecVerrou('inventaire', 'btn-inv-valider', async () => {
@@ -1366,7 +1555,7 @@ window.validerInventaire = () => avecVerrou('inventaire', 'btn-inv-valider', asy
     });
     const i = STK.inventaires.find(x=>x._id===_inv._id);
     if(i) Object.assign(i, { statut:'valide', nbEcarts:fin.nbEcarts, comptes, lignes:fin.lignes, validePar:user().name||'', date:aujourdhui(), rapportId:fin.rapportId, rapportNumero:fin.rapportNumero });
-    notify(`✅ Inventaire validé — ${fin.nbEcarts} écart(s). Rapport ${fin.rapportNumero} créé.`);
+    notify(`Inventaire validé — ${fin.nbEcarts} écart(s). Rapport ${fin.rapportNumero} créé.`);
     go('rapports');
     await voirRapport(fin.rapportId);
   }catch(e){
@@ -1402,7 +1591,7 @@ window.renderRapports = function(){
     const id = sid(r._id);
     return `<tr><td><span class="ref-tag" style="margin:0;">${esc(r.numero)}</span></td><td>${dateFr(r.date)}</td><td>${lieuHtml(r.lieuId)}</td>
       <td>${r.type==='depart' ? 'Départ' : 'Périodique'}</td><td>${fmtN(r.totaux?.articles)}</td><td>${fmtN(r.totaux?.avecEcart)}</td><td class="muted">${esc(r.validePar||'')}</td>
-      <td class="no-print">${id ? `<button class="btn btn-ghost btn-xs" onclick="voirRapport('${id}')">👁️ Voir</button> <button class="btn btn-primary btn-xs" onclick="voirRapport('${id}',true)">🖨️ Imprimer</button>` : ''}</td></tr>`;
+      <td class="no-print">${id ? `<button class="btn btn-ghost btn-xs" onclick="voirRapport('${id}')"><svg class=i aria-hidden=true><use href=#i-eye /></svg> Voir</button> <button class="btn btn-primary btn-xs" onclick="voirRapport('${id}',true)"><svg class=i aria-hidden=true><use href=#i-print /></svg> Imprimer</button>` : ''}</td></tr>`;
   });
   paginer('rap-body', rows, 8, 'Aucun rapport pour ces filtres.');
 };
@@ -1555,7 +1744,7 @@ window.relireLivraisons = async function(manuel){
   }
   _livEnCours = true;
   const btn = document.getElementById('btn-relire-liv');
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Lecture…'; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Lecture…'; }
   const res = { lues:0, deduites:0, aVerifier:0, annulees:0, erreur:'' };
   try{
     const c = STK.curseur;
@@ -1596,14 +1785,14 @@ window.relireLivraisons = async function(manuel){
     setSync(false, 'Erreur de lecture');
   }finally{
     _livEnCours = false;
-    if(btn){ btn.disabled = false; btn.textContent = '🔄 Relire les livraisons'; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Relire les livraisons'; }
   }
   const n = new Date();
   STK.derniereLecture = { ...res, heure: String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') };
   majBandeau();
   if(res.erreur) notify('Livraisons : ' + res.erreur,'err');
   else if(manuel || res.deduites || res.aVerifier || res.annulees)
-    notify(`🚚 ${res.deduites} livraison(s) déduite(s)` + (res.aVerifier ? `, ${res.aVerifier} à vérifier` : '') + (res.annulees ? `, ${res.annulees} annulée(s) après sortie` : ''), res.aVerifier || res.annulees ? 'warn' : 'ok');
+    notify(`${res.deduites} livraison(s) déduite(s)` + (res.aVerifier ? `, ${res.aVerifier} à vérifier` : '') + (res.annulees ? `, ${res.annulees} annulée(s) après sortie` : ''), res.aVerifier || res.annulees ? 'warn' : 'ok');
   if(['dashboard','livraisons','stock'].includes(curPg)) renderPg(curPg);
 };
 
@@ -1617,8 +1806,8 @@ function renderAVerifier(){
   paginer('liv-averifier', STK.aVerifier.map(f => {
     const id = sid(f._id);
     const actions = !id ? '' : f.statut === 'annulee_apres_deduction'
-      ? `<button class="btn btn-success btn-xs" onclick="reintegrerLivraison('${id}')">↩ Remettre en stock</button> <button class="btn btn-ghost btn-xs" onclick="ignorerLivraison('${id}')">Garder la sortie</button>`
-      : `<button class="btn btn-primary btn-xs" onclick="reessayerLivraison('${id}')">🔄 Réessayer</button> <button class="btn btn-ghost btn-xs" onclick="ignorerLivraison('${id}')">Ignorer</button>`;
+      ? `<button class="btn btn-success btn-xs" onclick="reintegrerLivraison('${id}')"><svg class=i aria-hidden=true><use href=#i-undo /></svg> Remettre en stock</button> <button class="btn btn-ghost btn-xs" onclick="ignorerLivraison('${id}')">Garder la sortie</button>`
+      : `<button class="btn btn-primary btn-xs" onclick="reessayerLivraison('${id}')"><svg class=i aria-hidden=true><use href=#i-refresh /></svg> Réessayer</button> <button class="btn btn-ghost btn-xs" onclick="ignorerLivraison('${id}')">Ignorer</button>`;
     return `<tr><td>${dateFr(f.date)}</td><td>${esc(f.produitNom||f.produitId||'')}</td><td>${fmtN(f.qtyLivraison)}</td><td style="font-size:12px;">${esc(f.motif||'')}</td><td class="no-print">${actions}</td></tr>`;
   }), 5, '');
 }
@@ -1651,7 +1840,7 @@ window.reessayerLivraison = (id) => avecVerrou('liv:'+id, null, async () => {
     await chargerTout();
     const r = await traiterLivraison({ ...s.data(), _id:s.id });
     await syncApresAction();
-    notify(r === 'deduite' ? '✅ Livraison déduite du stock' : 'Toujours impossible à déduire : vérifiez le motif', r === 'deduite' ? 'ok' : 'warn');
+    notify(r === 'deduite' ? 'Livraison déduite du stock' : 'Toujours impossible à déduire : vérifiez le motif', r === 'deduite' ? 'ok' : 'warn');
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 window.ignorerLivraison = (id) => avecVerrou('liv:'+id, null, async () => {
@@ -1662,7 +1851,7 @@ window.ignorerLivraison = (id) => avecVerrou('liv:'+id, null, async () => {
   if(!confirm(msg)) return;
   try{
     await updateDoc(doc(db,'stk_livTraitees',id), { statut: f.statut === 'annulee_apres_deduction' ? 'deduit' : 'ignoree', motif: (f.motif||'') + ' — décision : ' + (user().name||''), majLe:serverTimestamp() });
-    await syncApresAction(); notify('✅ Enregistré');
+    await syncApresAction(); notify('Enregistré');
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 window.reintegrerLivraison = (id) => avecVerrou('liv:'+id, null, async () => {
@@ -1681,7 +1870,7 @@ window.reintegrerLivraison = (id) => avecVerrou('liv:'+id, null, async () => {
       return f.lignes || [];
     });
     if(lignes === null) return notify('Déjà traitée','warn');
-    await syncApresAction(); notify('✅ Articles remis en stock');
+    await syncApresAction(); notify('Articles remis en stock');
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 async function syncApresAction(){
@@ -1807,7 +1996,7 @@ window.renderValeurs = function(){
     const id = sid(p._id);
     const tags = (p.annule ? ' <span class="tag-annule">annulée</span>' : '') + (Array.isArray(p.corrections) && p.corrections.length ? ` <span class="tag-corrige" title="Prix d'origine : ${esc(fmtF(p.corrections[0].ancien))}">corrigé</span>` : '') + (!Number(p.prixAchat) ? ' <span class="tag-annule">prix à 0</span>' : '');
     return `<tr class="${p.annule ? 'op-annulee' : ''}"><td>${dateFr(p.date)}</td><td>${esc(p.fournisseur||'')}</td><td class="muted">${esc(p.ref||'')}</td><td class="op-txt">${esc(nomArt(p.articleId))}${tags}</td><td>${fmtN(p.qty)}</td><td>${fmtF(p.prixAchat)}</td><td style="font-weight:700;">${fmtF(mt)}</td>
-      <td class="no-print">${id && !p.annule ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirCorrectionPrix('${id}')">💲 Prix</button>` : ''}</td></tr>`;
+      <td class="no-print">${id && !p.annule ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirCorrectionPrix('${id}')"><svg class=i aria-hidden=true><use href=#i-coin /></svg> Prix</button>` : ''}</td></tr>`;
   });
   paginer('va-body', rows, 8, 'Aucune ligne pour ces filtres.');
   document.getElementById('va-count').textContent = '(' + lignes.length + ')';
@@ -1848,7 +2037,7 @@ window.enregistrerJourJ = async function(){
   if(!confirm(msg)) return;
   try{
     await setDoc(doc(db,'stk_config','reglages'), { jourJ:d, majLe:serverTimestamp(), majPar:user().name||'' }, { merge:true });
-    STK.jourJ = d; majBandeau(); notify('✅ Jour J enregistré');
+    STK.jourJ = d; majBandeau(); notify('Jour J enregistré');
     relireLivraisons(true);
   }catch(e){ notify(msgErreur(e),'err'); }
 };
@@ -1870,7 +2059,7 @@ window.enregistrerJourJ = async function(){
      depuis la date « Clôturées depuis le » (30 jours par défaut).
 ═══════════════════════════════════════════════════ */
 let _demandes = [];
-const STATUTS_DEMANDE = { en_attente:'⏳ En attente', partielle:'⚠️ Partielle', cloturee:'✅ Clôturée' };
+const STATUTS_DEMANDE = { en_attente:'En attente', partielle:'Partielle', cloturee:'Clôturée' };
 const _dlEstArticle = l => l && (l.nature === 'article' || (l.articleId && !l.produitId));
 const _dlLib = l => _dlEstArticle(l) ? (l.articleNom || nomArt(l.articleId)) : ((l.produitNom || l.produitId || '?') + ' (produit)');
 
@@ -1886,6 +2075,7 @@ window.chargerDemandes = async function(){
     [ouvertes, recentes].forEach(sn => _docs(sn).forEach(d => m.set(d._id, d)));
     _demandes = [...m.values()].sort((a,b)=>String(b.dateCreation||'').localeCompare(String(a.dateCreation||'')) || String(b._id).localeCompare(String(a._id)));
     if(_demandes.some(d => d.lignes && d.lignes.some(l => !_dlEstArticle(l)))) await _produits();
+    _dmOuvertesLues = true;
     majBadgeDemandes();
     renderDemandes();
   }catch(e){ document.getElementById('dm-liste').innerHTML = `<div class="alert alert-danger">${esc(msgErreur(e))}</div>`; }
@@ -1898,8 +2088,8 @@ function majBadgeDemandes(){
 window.renderDemandes = function(){
   const actif = STK.traitementDemandes;
   document.getElementById('dm-etat').innerHTML = actif
-    ? '✅ <b>Traitement activé</b> : « Traiter » enregistre la réponse dans TMMB <b>et</b> sort les articles du stock général vers l\'agence. Ne traitez plus les demandes dans TMMB.'
-    : `🔒 <b>Consultation seulement.</b> Les demandes se traitent encore dans TMMB. ${estAdmin() ? 'Vous pourrez activer le traitement ici dans <a href="#" onclick="go(\'reglages\');return false;">Réglages</a> quand le stock ne sera plus géré dans TMMB.' : "L'administrateur l'activera quand le stock ne sera plus géré dans TMMB."}`;
+    ? '<svg class=i aria-hidden=true><use href=#i-check /></svg> <b>Traitement activé</b> : « Traiter » enregistre la réponse dans TMMB <b>et</b> sort les articles du stock général vers l\'agence. Ne traitez plus les demandes dans TMMB.'
+    : `<svg class=i aria-hidden=true><use href=#i-lock /></svg> <b>Consultation seulement.</b> Les demandes se traitent encore dans TMMB. ${estAdmin() ? 'Vous pourrez activer le traitement ici dans <a href="#" onclick="go(\'reglages\');return false;">Réglages</a> quand le stock ne sera plus géré dans TMMB.' : "L'administrateur l'activera quand le stock ne sera plus géré dans TMMB."}`;
   document.getElementById('dm-etat').className = 'alert ' + (actif ? 'alert-info' : 'alert-warn');
   const st = document.getElementById('dm-statut').value, ag = document.getElementById('dm-agence').value;
   const t = (document.getElementById('dm-search').value||'').trim().toLowerCase();
@@ -1913,7 +2103,7 @@ window.renderDemandes = function(){
   const rows = liste.map(d => {
     const id = sid(d._id);
     const lignes = (d.lignes||[]).map(l => {
-      const ic = l.statutLigne === 'envoye' ? '✅' : l.statutLigne === 'indisponible' ? '⛔' : '⏳';
+      const ic = l.statutLigne === 'envoye' ? '<svg class=i aria-hidden=true><use href=#i-check /></svg>' : l.statutLigne === 'indisponible' ? '<svg class=i aria-hidden=true><use href=#i-ban /></svg>' : '<svg class=i aria-hidden=true><use href=#i-clock /></svg>';
       const det = l.statutLigne === 'envoye' ? `envoyé ${fmtN(l.qteEnvoyee)}/${fmtN(l.qteDemandee)}`
         : l.statutLigne === 'indisponible' ? `indisponible${l.delaiDate ? ' jusqu\'au ' + dateFr(l.delaiDate) : ''}${l.recreee ? ' (redemandé)' : ''}` : `demandé ${fmtN(l.qteDemandee)}`;
       const dispo = _dlEstArticle(l) && l.statutLigne !== 'envoye' ? ` <span class="muted">· stock général : ${fmtN(qte(GENERAL, l.articleId))}</span>` : '';
@@ -1921,9 +2111,9 @@ window.renderDemandes = function(){
     }).join('');
     const peutTraiter = actif && id && d.statut !== 'cloturee';
     return `<tr><td>${dateFr(d.dateCreation)}</td><td>${lieuHtml(d.agenceId)}<div class="muted">${esc(d.chefAgenceNom||'')}</div></td>
-      <td style="font-size:12px;">${lignes}${d.note ? `<div class="muted" style="font-style:italic;">${esc(d.note)}</div>` : ''}${d.noteTraitement ? `<div style="margin-top:4px;">📝 ${esc(d.noteTraitement)}${d.traiteParNom ? ' — ' + esc(d.traiteParNom) : ''}</div>` : ''}</td>
+      <td style="font-size:12px;">${lignes}${d.note ? `<div class="muted" style="font-style:italic;">${esc(d.note)}</div>` : ''}${d.noteTraitement ? `<div style="margin-top:4px;"><svg class=i aria-hidden=true><use href=#i-edit /></svg> ${esc(d.noteTraitement)}${d.traiteParNom ? ' — ' + esc(d.traiteParNom) : ''}</div>` : ''}</td>
       <td><span class="tag tag-sm ${d.statut==='cloturee' ? 'tag-green' : d.statut==='partielle' ? 'tag-red' : 'tag-warn'}">${esc(STATUTS_DEMANDE[d.statut] || d.statut || '')}</span>${d.dateEnvoiPrevue ? `<div class="muted">envoi : ${dateFr(d.dateEnvoiPrevue)}</div>` : ''}</td>
-      <td class="no-print">${peutTraiter ? `<button class="btn btn-primary btn-xs" onclick="ouvrirTraitementDemande('${id}')">🚚 Traiter</button>` : ''}</td></tr>`;
+      <td class="no-print">${peutTraiter ? `<button class="btn btn-primary btn-xs" onclick="ouvrirTraitementDemande('${id}')"><svg class=i aria-hidden=true><use href=#i-truck /></svg> Traiter</button>` : ''}</td></tr>`;
   });
   document.getElementById('dm-liste').innerHTML = '<div class="tw"><table><thead><tr><th>Date</th><th>Agence</th><th>Articles demandés</th><th>Statut</th><th class="no-print"></th></tr></thead><tbody id="dm-body"></tbody></table></div>';
   paginer('dm-body', rows, 5, 'Aucune demande pour ces filtres.');
@@ -1942,12 +2132,12 @@ window.ouvrirTraitementDemande = function(id){
   const d = _demandes.find(x => x._id === id); if(!d || d.statut === 'cloturee') return;
   if(!IDX.agences.has(d.agenceId)) return notify("Agence de la demande introuvable",'err');
   _dmId = id;
-  document.getElementById('md-titre').textContent = '🚚 Traiter la demande — ' + (d.agenceNom || nomLieu(d.agenceId));
+  document.getElementById('md-titre').textContent = 'Traiter la demande — ' + (d.agenceNom || nomLieu(d.agenceId));
   document.getElementById('md-info').innerHTML = `Demandé par ${esc(d.chefAgenceNom||'')} le ${dateFr(d.dateCreation)}${d.note ? ` — « ${esc(d.note)} »` : ''}`;
   document.getElementById('md-date').value = aujourdhui();
   document.getElementById('md-note').value = d.noteTraitement || '';
   document.getElementById('md-lignes').innerHTML = (d.lignes||[]).map((l, i) => {
-    if(l.statutLigne === 'envoye') return `<tr><td>${esc(_dlLib(l))}</td><td colspan="3" class="muted">✅ déjà envoyé : ${fmtN(l.qteEnvoyee)} / ${fmtN(l.qteDemandee)}</td></tr>`;
+    if(l.statutLigne === 'envoye') return `<tr><td>${esc(_dlLib(l))}</td><td colspan="3" class="muted"><svg class=i aria-hidden=true><use href=#i-check /></svg> déjà envoyé : ${fmtN(l.qteEnvoyee)} / ${fmtN(l.qteDemandee)}</td></tr>`;
     const dispo = _dlEstArticle(l) ? qte(GENERAL, l.articleId) : null;
     const defaut = dispo == null ? l.qteDemandee : Math.max(0, Math.min(l.qteDemandee, dispo));
     return `<tr data-i="${i}"><td>${esc(_dlLib(l))}<div class="muted">demandé : ${fmtN(l.qteDemandee)}${dispo != null ? ` · stock général : ${fmtN(dispo)}` : ''}</div></td>
@@ -2032,7 +2222,7 @@ window.confirmerTraitementDemande = () => avecVerrou('demande', 'btn-md', async 
     Object.assign(d0, res.maj, { _ts:null });
     fermerModale('modal-demande');
     majBadgeDemandes(); renderDemandes();
-    notify(`✅ Demande ${res.maj.statut === 'cloturee' ? 'clôturée' : 'traitée (partielle)'} — réponse visible dans TMMB`);
+    notify(`Demande ${res.maj.statut === 'cloturee' ? 'clôturée' : 'traitée (partielle)'} — réponse visible dans TMMB`);
   }catch(e){ notify(msgErreur(e),'err'); }
 });
 
@@ -2047,13 +2237,13 @@ window.basculerTraitementDemandes = async function(){
   try{
     await setDoc(doc(db,'stk_config','reglages'), { traitementDemandes:v, traitementDemandesLe:serverTimestamp(), traitementDemandesPar:user().name||'' }, { merge:true });
     STK.traitementDemandes = v; renderReglages();
-    notify(v ? '✅ Traitement des demandes activé' : 'Traitement des demandes désactivé');
+    notify(v ? 'Traitement des demandes activé' : 'Traitement des demandes désactivé');
   }catch(e){ notify(msgErreur(e),'err'); }
 };
 function renderReglages(){
   document.getElementById('rg-jourj').value = STK.jourJ || '';
   const b = document.getElementById('rg-demandes-btn'), e = document.getElementById('rg-demandes-etat');
-  e.innerHTML = STK.traitementDemandes ? '<span class="tag tag-green">✅ Activé</span>' : '<span class="tag tag-warn">🔒 Désactivé (consultation seulement)</span>';
+  e.innerHTML = STK.traitementDemandes ? '<span class="tag tag-green"><svg class=i aria-hidden=true><use href=#i-check /></svg> Activé</span>' : '<span class="tag tag-warn"><svg class=i aria-hidden=true><use href=#i-lock /></svg> Désactivé (consultation seulement)</span>';
   b.textContent = STK.traitementDemandes ? 'Désactiver' : 'Activer';
   b.className = 'btn ' + (STK.traitementDemandes ? 'btn-ghost' : 'btn-primary');
 }
