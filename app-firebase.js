@@ -710,7 +710,7 @@ function remplirSelectsOperations(optsAg, optGen){
   garder('sortie-hlieu', '<option value="">Tous les lieux</option>' + optGen + optsAg);
   for(const op of Object.keys(OPS)){
     const tb = document.getElementById(op + '-lignes');
-    if(tb) tb.querySelectorAll('.l-art').forEach(s => { const v = s.value; s.innerHTML = optionsArticles(); s.value = v; });
+    if(tb) tb.querySelectorAll('.l-art').forEach(s => { const v = s.value, c = s.closest('td').querySelector('.l-cherche'); s.innerHTML = optionsArticles(c ? c.value : ''); s.value = v; });
     majEnteteLignes(op);
   }
 }
@@ -731,20 +731,59 @@ function majEnteteLignes(op){
   const h = document.getElementById(op + '-lhead'); if(!h) return;
   h.innerHTML = `<tr><th>Article</th>${OPS[op].source ? '<th>Disponible</th>' : ''}<th>Quantité</th>${avecPrixEcran(op) ? '<th>Prix TMMB</th><th>Total</th>' : ''}<th></th></tr>`;
 }
-function optionsArticles(){
-  return '<option value="">— Article —</option>' + articlesTries().map(a=>`<option value="${esc(a._id)}">${esc(a.nom)}${a.ref ? ' ('+esc(a.ref)+')' : ''}</option>`).join('');
+// Recherche sans tenir compte des majuscules ni des accents (« fer » trouve « Fér… »).
+const _norm = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+function articlesCherches(terme){
+  const t = _norm(terme);
+  if(!t) return articlesTries();
+  const mots = t.split(/\s+/);
+  const h = a => _norm(a.nom) + ' ' + _norm(a.ref);
+  // D'abord l'expression entière (« zarticle 1 ») ; si rien, tous les mots dans n'importe quel ordre.
+  const phrase = articlesTries().some(a => h(a).includes(t));
+  const ok = a => phrase ? h(a).includes(t) : mots.every(m => h(a).includes(m));
+  // Référence exacte en premier, puis référence qui commence par la saisie, puis le reste.
+  const rang = a => _norm(a.ref) === t ? 0 : _norm(a.ref).startsWith(t) ? 1 : _norm(a.nom).startsWith(t) ? 2 : 3;
+  return articlesTries().filter(ok).sort((x,y) => rang(x) - rang(y));
 }
+function optionsArticles(terme){
+  const liste = articlesCherches(terme);
+  const tete = terme ? `<option value="">— ${liste.length} article(s) trouvé(s) —</option>` : '<option value="">— Article —</option>';
+  return tete + liste.map(a=>`<option value="${esc(a._id)}">${a.ref ? esc(a.ref)+' — ' : ''}${esc(a.nom)}</option>`).join('');
+}
+// Filtre la liste d'une ligne pendant la frappe ; un seul résultat → il est choisi.
+window.chercherArticleLigne = function(inp, op){
+  const sel = inp.closest('td').querySelector('.l-art');
+  const avant = sel.value;
+  sel.innerHTML = optionsArticles(inp.value);
+  const ids = [...sel.options].map(o => o.value).filter(Boolean);
+  if(ids.includes(avant)) sel.value = avant;
+  else if(ids.length === 1) sel.value = ids[0];
+  else sel.value = '';
+  inp.classList.toggle('l-cherche-vide', !!inp.value.trim() && !ids.length);
+  if(sel.value !== avant) majLignes(op);
+};
+// Entrée : choisit le premier article trouvé et passe à la quantité.
+window.toucheChercheLigne = function(ev, inp, op){
+  if(ev.key !== 'Enter') return;
+  ev.preventDefault();
+  const tr = inp.closest('tr'), sel = tr.querySelector('.l-art');
+  if(!sel.value){ const o = [...sel.options].find(x => x.value); if(o){ sel.value = o.value; majLignes(op); } }
+  if(sel.value) tr.querySelector('.l-qte').focus();
+  else notify('Aucun article ne correspond à « ' + inp.value + ' »','warn');
+};
 window.ajouterLigne = function(op){
   const tb = document.getElementById(op + '-lignes');
   if(tb.children.length >= MAX_LIGNES) return notify(`Maximum ${MAX_LIGNES} articles par opération`,'warn');
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td><select class="form-control l-art" onchange="majLignes('${op}')">${optionsArticles()}</select></td>`
+  tr.innerHTML = `<td class="l-art-td"><input type="search" class="form-control l-cherche" placeholder="🔍 Référence ou nom…" autocomplete="off" oninput="chercherArticleLigne(this,'${op}')" onkeydown="toucheChercheLigne(event,this,'${op}')">`
+    + `<select class="form-control l-art" onchange="majLignes('${op}')">${optionsArticles()}</select></td>`
     + (OPS[op].source ? '<td class="num l-dispo">—</td>' : '')
     + `<td><input type="number" class="form-control l-qte" min="1" step="1" placeholder="Quantité" oninput="majLignes('${op}')"></td>`
     + (avecPrixEcran(op) ? '<td class="num l-prix">—</td><td class="num l-total">—</td>' : '')
     + `<td><button class="btn btn-ghost btn-xs" onclick="this.closest('tr').remove();majLignes('${op}')">✕</button></td>`;
   tb.appendChild(tr);
   majEnteteLignes(op);
+  if(tb.children.length > 1){ const c = tr.querySelector('.l-cherche'); if(c) c.focus(); }
 };
 window.majLignes = function(op){
   const src = sourceOp(op); let tot = 0;

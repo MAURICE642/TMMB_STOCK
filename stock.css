@@ -106,3 +106,8 @@ tr.ligne-plus button{margin:0 4px;}
   body.impression .rap-doc .rap-ruban{margin:0 0 14px;}
   @page{size:A4;margin:12mm;}
 }
+
+/* ── Recherche d'article dans les lignes de saisie ── */
+.l-art-td{min-width:240px;}
+.l-art-td .l-cherche{margin-bottom:5px;font-size:12px;padding:6px 10px;}
+.l-art-td .l-cherche.l-cherche-vide{border-color:var(--danger);}
