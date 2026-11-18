@@ -42,10 +42,16 @@ function aujourdhui(){
 }
 
 /* ─── Message bref ─── */
+/* ─── Icône (jeu d'icônes défini en haut de index.html) ─── */
+function icone(nom){ return '<svg class="i" aria-hidden="true"><use href="#i-' + nom + '"/></svg>'; }
+
 function notify(msg, type){
   const t = document.getElementById('toast');
   if(!t) return;
-  t.textContent = msg;
+  // Le texte est inséré comme texte (jamais comme HTML) ; seule l'icône est du HTML fixe.
+  const ic = { err:'alert', warn:'alert', info:'info' }[type] || 'check';
+  t.innerHTML = icone(ic) + '<span></span>';
+  t.lastChild.textContent = String(msg).replace(/^[\u2600-\u27BF\u{1F300}-\u{1FAFF}]\uFE0F?\s*/u, '');
   t.className = 'show t-' + (type||'ok');
   clearTimeout(t._tm);
   t._tm = setTimeout(()=>{ t.className=''; }, type==='err' ? 6000 : 3500);
