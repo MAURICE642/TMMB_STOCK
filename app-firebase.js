@@ -61,7 +61,7 @@ const IDX = { articles:new Map(), agences:new Map(), commerciaux:new Map(), prod
 const STK = {
   stock: new Map(),        // cleStock(lieu, article) → qty
   reglArt: new Map(),      // articleId → { seuil }
-  jourJ: '', curseur: null, demandesActives: false,
+  jourJ: '', curseur: null,
   inventaires: [], aVerifier: [], derniereLecture: null
 };
 let curPg = 'dashboard';
@@ -69,10 +69,10 @@ let _bootEnCours = false, _appDemarree = false, _livEnCours = false;
 const _verrous = new Set();
 
 const PAGE_TITLES = {
-  dashboard:"Vue d'ensemble", general:'État du stock général', entrees:'Entrées fournisseurs', dispatch:'Dispatch vers les agences',
+  dashboard:"Vue d'ensemble", general:'État du stock général', demandes:'Demandes des agences', entrees:'Entrées fournisseurs', dispatch:'Dispatch vers les agences',
   sorties:'Autres sorties', agences:'Stock par agence', transferts:'Transferts entre lieux', livraisons:'Livraisons TMMB',
   inventaires:'Inventaires', rapports:"Rapports d'inventaire", mouvements:'Mouvements & synthèse', articles:'Articles',
-  valeurs:'Achats & valeurs', reglages:'Réglages', demandes:'Demandes des agences'
+  valeurs:'Achats & valeurs', reglages:'Réglages'
 };
 const PAGES_ADMIN = ['valeurs','reglages'];
 
@@ -297,6 +297,38 @@ onAuthStateChanged(auth, async (u) => {
    + stk_stock + stk_articles + inventaires + livraisons à vérifier.
    Les mouvements, prix et rapports ne sont lus qu'à la demande, par période.
 ═══════════════════════════════════════════════════ */
+/* Inventaires lus à l'ouverture : seulement ceux en cours, les inventaires
+   de départ (un par lieu) et ceux des 90 derniers jours. Une période plus
+   ancienne n'est lue que si on la demande (filtre « Du » de la page). */
+const INV_JOURS = 90;
+const trierInventaires = liste => liste.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || String(b._id).localeCompare(String(a._id)));
+async function chargerInventairesRecents(){
+  const depuis = _ilYa(INV_JOURS);
+  const [enCours, departs, recents] = await Promise.all([
+    getDocs(query(collection(db,'stk_inventaires'), where('statut','in',['brouillon','validation_en_cours']))),
+    getDocs(query(collection(db,'stk_inventaires'), where('type','==','depart'))),
+    getDocs(query(collection(db,'stk_inventaires'), where('date','>=',depuis)))
+  ]);
+  STK.invDepuis = depuis;
+  const m = new Map();
+  [enCours, departs, recents].forEach(sn => _docs(sn).forEach(d => m.set(d._id, d)));
+  return [...m.values()];
+}
+let _invPlusAnciensEnCours = false;
+async function chargerInventairesDepuis(du){
+  if(_invPlusAnciensEnCours || !du || !STK.invDepuis || du >= STK.invDepuis) return false;
+  _invPlusAnciensEnCours = true;
+  try{
+    const s = await getDocs(query(collection(db,'stk_inventaires'), where('date','>=',du), where('date','<',STK.invDepuis)));
+    const m = new Map(STK.inventaires.map(i => [i._id, i]));
+    _docs(s).forEach(d => { if(!m.has(d._id)) m.set(d._id, d); });
+    STK.inventaires = trierInventaires([...m.values()]);
+    STK.invDepuis = du;
+    return true;
+  }catch(e){ notify(msgErreur(e),'err'); return false; }
+  finally{ _invPlusAnciensEnCours = false; }
+}
+
 async function chargerTout(){
   const [arts, ags, coms, stk, regl, cfg, cur, invs, aver] = await Promise.all([
     getDocs(collection(db,'articles')),
@@ -306,7 +338,7 @@ async function chargerTout(){
     getDocs(collection(db,'stk_articles')),
     getDoc(doc(db,'stk_config','reglages')),
     getDoc(doc(db,'stk_config','curseurLivraisons')),
-    getDocs(collection(db,'stk_inventaires')),
+    chargerInventairesRecents(),
     getDocs(query(collection(db,'stk_livTraitees'), where('statut','in',['a_verifier','annulee_apres_deduction'])))
   ]);
   TDB.articles = _docs(arts);
@@ -318,9 +350,9 @@ async function chargerTout(){
   STK.stock = new Map(_docs(stk).map(s=>[cleStock(s.agenceId, s.articleId), Number(s.qty)||0]));
   STK.reglArt = new Map(_docs(regl).map(r=>[r._id, r]));
   STK.jourJ = (cfg.exists() && cfg.data().jourJ) || '';
-  STK.demandesActives = !!(cfg.exists() && cfg.data().demandesActives === true);   // ── v4 ──
+  STK.traitementDemandes = !!(cfg.exists() && cfg.data().traitementDemandes === true);
   STK.curseur = cur.exists() ? cur.data() : null;
-  STK.inventaires = _docs(invs).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')) || String(b._id).localeCompare(String(a._id)));
+  STK.inventaires = trierInventaires(invs);
   STK.aVerifier = _docs(aver).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   const n = new Date();
   document.getElementById('last-sync-label').textContent = 'Actualisé à ' + String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
@@ -344,6 +376,7 @@ function demarrerApp(){
   defaut('va-du', t.slice(0,8) + '01'); defaut('va-au', t);
   defaut('liv-du', m30); defaut('liv-au', t);
   defaut('rap-du', _ilYa(365)); defaut('rap-au', t);
+  defaut('dm-depuis', _ilYa(30));
   majBandeau();
   go(curPg);
 }
@@ -408,7 +441,7 @@ function renderPg(pg){
     else if(pg==='livraisons'){ renderAVerifier(); chargerLivTraitees(); }
     else if(pg==='mouvements') chargerMouvements();
     else if(pg==='valeurs') chargerValeurs();
-    else if(pg==='reglages'){ document.getElementById('rg-jourj').value = STK.jourJ || ''; majReglageDemandes(); }
+    else if(pg==='reglages') renderReglages();
     else if(pg==='demandes') chargerDemandes();
   }catch(e){ console.error(e); notify("Erreur d'affichage : " + e.message,'err'); }
 }
@@ -629,7 +662,7 @@ function construireOperations(){
     const destHtml = c.dest === 'general' ? `<div class="form-group"><div class="form-label">Arrivée</div><div style="padding:9px 0;">${lieuHtml(GENERAL)}</div></div>`
       : c.dest ? `<div class="form-group"><div class="form-label">${c.dest === 'agence' ? 'Agence qui reçoit' : "Lieu d'arrivée"} *</div><select class="form-control" id="${op}-dst"></select></div>` : '';
     const motifHtml = op === 'sortie' ? `<div class="form-group"><div class="form-label">Motif *</div><select class="form-control" id="sortie-motif">${Object.entries(MOTIFS_SORTIE).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('')}</select></div>` : '';
-    const fournHtml = op === 'entree' ? `<div class="form-group"><div class="form-label">Fournisseur *</div><input type="text" class="form-control" id="entree-fourn" maxlength="100" placeholder="Nom du fournisseur"></div>` : '';
+    const fournHtml = op === 'entree' ? `<div class="form-group"><div class="form-label">Fournisseur</div><input type="text" class="form-control" id="entree-fourn" maxlength="100" placeholder="Facultatif"></div>` : '';
     el.innerHTML = `
       <div class="card no-print">
         <div class="card-title">${c.titre}</div>
@@ -771,7 +804,6 @@ window.enregistrerOp = (op) => avecVerrou('op:'+op, 'btn-'+op, async () => {
     if(c.dest && !estLieu(dst)) throw new Error("Choisissez le lieu d'arrivée");
     if(src && dst && src === dst) throw new Error("Le lieu d'arrivée doit être différent du lieu de départ");
     if(!dateValide(date)) throw new Error('Date invalide (pas de date future)');
-    if(op === 'entree' && !fourn) throw new Error('Indiquez le fournisseur');
     if(op === 'sortie' && !MOTIFS_SORTIE[motif]) throw new Error('Choisissez le motif');
     if(op === 'sortie' && motif === 'autre' && !note) throw new Error('Précisez le motif de la sortie');
     lignes = lireLignes(op);
@@ -876,7 +908,7 @@ window.renderHistorique = function(op){
     if(op === 'entree'){
       const mt = actives.reduce((s,x)=>{ const p = _prixMap.get(x._id); return s + (p ? (Number(x.qty)||0) * (Number(p.prixAchat)||0) : 0); }, 0);
       total += mt;
-      return `<tr><td>${dateFr(m.date)}</td><td>${esc(m.fournisseur||'')}${m.ref ? `<div class="muted">${esc(m.ref)}</div>` : ''}${m.note ? `<div class="muted">${esc(m.note)}</div>` : ''}</td><td style="font-size:12px;">${lignes}${toutAnnuler}</td>${admin ? `<td style="font-weight:700;">${fmtF(mt)}</td>` : ''}${auteurTxt}</tr>`;
+      return `<tr><td>${dateFr(m.date)}</td><td>${m.fournisseur ? esc(m.fournisseur) : '<span class="muted">—</span>'}${m.ref ? `<div class="muted">${esc(m.ref)}</div>` : ''}${m.note ? `<div class="muted">${esc(m.note)}</div>` : ''}</td><td style="font-size:12px;">${lignes}${toutAnnuler}</td>${admin ? `<td style="font-weight:700;">${fmtF(mt)}</td>` : ''}${auteurTxt}</tr>`;
     }
     if(op === 'dispatch') return `<tr><td>${dateFr(m.date)}</td><td>${lieuHtml(m.agenceDestId)}</td><td style="font-size:12px;">${lignes}${toutAnnuler}</td><td class="muted">${esc(m.note||'')}</td>${auteurTxt}</tr>`;
     if(op === 'transfert') return `<tr><td>${dateFr(m.date)}</td><td>${lieuHtml(m.agenceId)} → ${lieuHtml(m.agenceDestId)}</td><td style="font-size:12px;">${lignes}${toutAnnuler}</td><td class="muted">${esc(m.note||'')}</td>${auteurTxt}</tr>`;
@@ -936,7 +968,6 @@ window.enregistrerCorrection = () => avecVerrou('corr', 'btn-mc', async () => {
   const fourn = document.getElementById('mc-fourn').value.trim(), ref = document.getElementById('mc-ref').value.trim();
   if(!quantiteValide(q)) return notify('Quantité invalide (nombre entier > 0)','err');
   if(!dateValide(date)) return notify('Date invalide (pas de date future)','err');
-  if(m0.type === 'entree' && !fourn) return notify('Le fournisseur ne peut pas être vide','err');
   if(!motif) return notify('Indiquez le motif de la correction','err');
   const avant = { quantite:qteAffichee(m0), date:m0.date||'', note:m0.note||'', ...(m0.type === 'entree' ? { fournisseur:m0.fournisseur||'', ref:m0.ref||'' } : {}) };
   const apres = { quantite:Number(q), date, note, ...(m0.type === 'entree' ? { fournisseur:fourn, ref } : {}) };
@@ -982,6 +1013,7 @@ window.ouvrirAnnulation = function(cle, op, uneLigne){
   document.getElementById('mn-info').innerHTML = `${ms.length > 1 ? `<b>Toute l'opération</b> (${ms.length} lignes) :<br>` : ''}` +
     ms.map(m => `${esc(nomArt(m.articleId))} × ${fmtN(qteAffichee(m))} — ${m.type === 'transfert' ? `${lieuHtml(m.agenceId)} → ${lieuHtml(m.agenceDestId)}` : lieuHtml(m.agenceId)} — ${dateFr(m.date)}`).join('<br>');
   document.getElementById('mn-motif').value = '';
+  if(ms.some(m => m.demandeId)) document.getElementById('mn-info').innerHTML += '<div class="alert alert-warn" style="margin-top:8px;">⚠️ Cette sortie servait une demande d\'agence : le statut de la demande dans TMMB ne sera pas modifié.</div>';
   ouvrirModale('modal-annul');
 };
 window.confirmerAnnulation = () => avecVerrou('annul', 'btn-mn', async () => {
@@ -1090,17 +1122,23 @@ window.renderInventaires = function(){
     + ' Le <b>premier inventaire</b> d\'un lieu est l\'<b>inventaire de départ</b>. À la validation, un <b>rapport numéroté</b> est créé et peut être imprimé.';
   const fl = document.getElementById('inv-f-lieu').value, ft = document.getElementById('inv-f-type').value, fs = document.getElementById('inv-f-statut').value;
   const du = document.getElementById('inv-f-du').value, au = document.getElementById('inv-f-au').value;
+  // Date « Du » plus ancienne que ce qui est chargé : on lit la période manquante une seule fois.
+  if(du && STK.invDepuis && du < STK.invDepuis){ chargerInventairesDepuis(du).then(ok => { if(ok && curPg === 'inventaires' && !_inv) renderInventaires(); }); }
+  const statutOk = i => !fs || (fs === 'valide' ? i.statut === 'valide' : fs === 'annule' ? i.statut === 'annule' : !['valide','annule'].includes(i.statut));
   const liste = STK.inventaires.filter(i => (!fl || i.agenceId === fl) && (!ft || i.type === ft)
-    && (!fs || (fs === 'valide' ? i.statut === 'valide' : i.statut !== 'valide')) && (!du || i.date >= du) && (!au || i.date <= au));
+    && statutOk(i) && (!du || i.date >= du) && (!au || i.date <= au));
   const rows = liste.map(i => {
     const id = sid(i._id), nb = i.statut === 'valide' ? (i.lignes||[]).length : Object.keys(i.comptes||{}).length;
-    const ouvrable = id && (i.statut === 'valide' || peutInventorier(i.agenceId));
+    const annule = i.statut === 'annule';
+    const ouvrable = id && !annule && (i.statut === 'valide' || peutInventorier(i.agenceId));
+    const btnAnnuler = id && estAdmin() && i.statut === 'brouillon' ? ` <button class="btn btn-ghost btn-xs" onclick="ouvrirAnnulationInventaire('${id}')">🚫 Annuler</button>` : '';
     return `<tr><td>${dateFr(i.date)}</td><td>${lieuHtml(i.agenceId)}</td>
       <td>${i.type==='depart' ? '<span class="tag tag-purple tag-sm">Départ</span>' : '<span class="tag tag-blue tag-sm">Périodique</span>'}</td>
-      <td>${i.statut==='valide' ? '<span class="tag tag-green tag-sm">Validé</span>' : '<span class="tag tag-warn tag-sm">En cours</span>'}</td>
-      <td>${fmtN(nb)}</td><td>${i.statut==='valide' ? fmtN(i.nbEcarts||0) : '—'}</td><td class="muted">${esc(i.validePar || i.creePar || '')}</td>
+      <td>${i.statut==='valide' ? '<span class="tag tag-green tag-sm">Validé</span>' : annule ? `<span class="tag-annule" title="${esc(i.motifAnnulation||'')}">Annulé</span>` : '<span class="tag tag-warn tag-sm">En cours</span>'}</td>
+      <td>${fmtN(nb)}</td><td>${i.statut==='valide' ? fmtN(i.nbEcarts||0) : '—'}</td>
+      <td class="muted">${annule ? `${esc(i.annulePar||'')}<div style="font-size:11px;">annulé : « ${esc(i.motifAnnulation||'')} »</div>` : esc(i.validePar || i.creePar || '')}</td>
       <td>${i.rapportId && sid(i.rapportId) ? `<a href="#" onclick="voirRapport('${sid(i.rapportId)}');return false;">${esc(i.rapportNumero||'Voir')}</a>` : '—'}</td>
-      <td class="no-print">${ouvrable ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirInventaire('${id}')">${i.statut==='valide' ? '👁️ Voir' : '✏️ Continuer'}</button>` : ''}</td></tr>`;
+      <td class="no-print">${ouvrable ? `<button class="btn btn-ghost btn-xs" onclick="ouvrirInventaire('${id}')">${i.statut==='valide' ? '👁️ Voir' : '✏️ Continuer'}</button>` : ''}${btnAnnuler}</td></tr>`;
   });
   paginer('inv-body', rows, 9, "Aucun inventaire. Commencez par l'inventaire de départ de chaque lieu.");
 };
@@ -1108,7 +1146,7 @@ window.nouvelInventaire = async function(){
   const lieu = document.getElementById('inv-new-lieu').value;
   if(!estLieu(lieu)) return notify('Choisissez le lieu à inventorier','err');
   if(!peutInventorier(lieu)) return notify("L'inventaire du stock général est réservé à l'administrateur",'err');
-  const enCours = STK.inventaires.find(i => i.agenceId === lieu && i.statut !== 'valide');
+  const enCours = STK.inventaires.find(i => i.agenceId === lieu && ['brouillon','validation_en_cours'].includes(i.statut));
   if(enCours){ notify('Un inventaire est déjà en cours pour ce lieu : il est rouvert','warn'); return ouvrirInventaire(enCours._id); }
   const type = STK.inventaires.some(i => i.agenceId === lieu && i.statut === 'valide') ? 'periodique' : 'depart';
   if(!confirm(`Commencer l'inventaire ${type==='depart' ? 'de DÉPART' : 'périodique'} de ${nomLieu(lieu)} ?`)) return;
@@ -1132,10 +1170,47 @@ window.ouvrirInventaire = function(id){
       ? "Saisissez la quantité <b>réellement comptée</b> de chaque article. <b>Case vide = 0</b> à la validation. Enregistrez le brouillon régulièrement si le comptage est long."
       : "Saisissez la quantité comptée des articles vérifiés. <b>Case vide = article non compté</b> (son stock ne change pas). L'écart est calculé au moment de la validation.";
   document.getElementById('inv-actions').style.display = i.statut === 'valide' ? 'none' : '';
+  document.getElementById('btn-inv-annuler').style.display = estAdmin() && i.statut === 'brouillon' ? '' : 'none';
   document.getElementById('inv-search').value = ''; document.getElementById('inv-filtre').value = '';
   renderSaisieInventaire();
 };
 window.fermerInventaire = function(){ renderInventaires(); };
+window._invOuvertId = () => _inv && _inv._id;
+
+/* Annulation d'un inventaire en brouillon (administrateur).
+   Un brouillon n'a jamais modifié le stock : rien n'est recalculé. Il n'est pas
+   effacé : il passe « Annulé » avec l'auteur, la date et le motif, et on peut
+   recommencer un inventaire neuf pour ce lieu. */
+let _invAnnul = null;
+window.ouvrirAnnulationInventaire = function(id){
+  if(!estAdmin()) return notify("Réservé à l'administrateur",'err');
+  const i = STK.inventaires.find(x => x._id === id);
+  if(!i || i.statut !== 'brouillon') return notify('Seul un inventaire en brouillon peut être annulé','warn');
+  _invAnnul = id;
+  document.getElementById('mi-info').innerHTML = `Inventaire ${i.type==='depart' ? 'de départ' : 'périodique'} de <b>${lieuHtml(i.agenceId)}</b>, commencé le ${dateFr(i.date)} par ${esc(i.creePar||'')} — ${fmtN(Object.keys(i.comptes||{}).length)} article(s) déjà compté(s).`;
+  document.getElementById('mi-motif').value = '';
+  ouvrirModale('modal-annul-inv');
+};
+window.confirmerAnnulationInventaire = () => avecVerrou('annul-inv', 'btn-mi', async () => {
+  const id = _invAnnul; if(!id) return;
+  const motif = document.getElementById('mi-motif').value.trim();
+  if(!motif) return notify("Indiquez le motif de l'annulation",'err');
+  const ref = doc(db,'stk_inventaires',id);
+  try{
+    const maj = await runTransaction(db, async (tx) => {
+      const s = await tx.get(ref);
+      if(!s.exists()) throw new Error('Inventaire introuvable');
+      if(s.data().statut !== 'brouillon') throw new Error("Cet inventaire n'est plus en brouillon : il ne peut pas être annulé");
+      const m = { statut:'annule', annuleLe:serverTimestamp(), annulePar:user().name||'', annuleParId:user().id||'', motifAnnulation:motif.slice(0,200) };
+      tx.update(ref, m);
+      return m;
+    });
+    const i = STK.inventaires.find(x => x._id === id); if(i) Object.assign(i, maj, { annuleLe:null });
+    fermerModale('modal-annul-inv');
+    notify("✅ Inventaire annulé — vous pouvez en commencer un nouveau pour ce lieu");
+    renderInventaires();
+  }catch(e){ notify(msgErreur(e),'err'); }
+});
 window.renderSaisieInventaire = function(){
   if(!_inv) return;
   const ro = _inv.statut === 'valide';
@@ -1739,152 +1814,207 @@ window.enregistrerJourJ = async function(){
   }catch(e){ notify(msgErreur(e),'err'); }
 };
 
-
 /* ═══════════════════════════════════════════════════
-   v4 — DEMANDES DES AGENCES (collection TMMB « demandesLivraison »)
-   Les chefs d'agence demandent dans TMMB. Ici, le gestionnaire / l'admin
-   traite la demande : les mêmes champs que TMMB sont écrits (statut,
-   lignes, noteTraitement…), donc l'agence voit la réponse dans TMMB.
-   En même temps, un dispatch stock général → agence est enregistré.
-   Le traitement est DÉSACTIVÉ tant que l'admin ne l'active pas (Réglages).
+   DEMANDES DES AGENCES (collection TMMB « demandesLivraison »)
+   ---------------------------------------------------
+   - Les chefs d'agence font leurs demandes dans TMMB, comme aujourd'hui.
+   - Ici on les CONSULTE toujours. Le TRAITEMENT est désactivé par défaut :
+     l'admin l'active dans Réglages le jour où le stock n'est plus géré dans
+     TMMB (sinon une demande traitée dans TMMB ne ferait pas bouger ce stock).
+   - Traiter = écrire dans la demande EXACTEMENT les champs que TMMB écrit
+     (lignes, statut, dateEnvoiPrevue, dateTraitement, traiteParId/Nom,
+     noteTraitement) : le chef d'agence voit la réponse dans TMMB.
+     ET, dans la même transaction, sortir les articles envoyés du stock
+     général vers l'agence (dispatch), refusé si le stock général manque.
+   - Une ligne déjà « envoyée » ne peut pas être renvoyée (pas de double sortie).
+   - Lectures : demandes ouvertes (en attente / partielles) + celles créées
+     depuis la date « Clôturées depuis le » (30 jours par défaut).
 ═══════════════════════════════════════════════════ */
 let _demandes = [];
-const DL_STATUTS = { en_attente:'En attente', partielle:'Partielle', cloturee:'Clôturée' };
-const dlEstArticle = l => !!l && l.nature === 'article';
-const dlLib = l => esc((dlEstArticle(l) ? l.articleNom : l.produitNom) || '—') + (dlEstArticle(l) ? '' : ' <span class="ref-tag">produit</span>');
+const STATUTS_DEMANDE = { en_attente:'⏳ En attente', partielle:'⚠️ Partielle', cloturee:'✅ Clôturée' };
+const _dlEstArticle = l => l && (l.nature === 'article' || (l.articleId && !l.produitId));
+const _dlLib = l => _dlEstArticle(l) ? (l.articleNom || nomArt(l.articleId)) : ((l.produitNom || l.produitId || '?') + ' (produit)');
 
 window.chargerDemandes = async function(){
-  const tb = document.getElementById('dm-liste');
-  tb.innerHTML = '<tr><td class="emp">Chargement…</td></tr>';
+  const depuis = document.getElementById('dm-depuis').value || _ilYa(30);
+  document.getElementById('dm-liste').innerHTML = '<div class="muted">Chargement…</div>';
   try{
-    _demandes = _docs(await getDocs(collection(db,'demandesLivraison')))
-      .sort((a,b)=>String(b.dateCreation||'').localeCompare(String(a.dateCreation||'')));
+    const [ouvertes, recentes] = await Promise.all([
+      getDocs(query(collection(db,'demandesLivraison'), where('statut','in',['en_attente','partielle']))),
+      getDocs(query(collection(db,'demandesLivraison'), where('dateCreation','>=',depuis)))
+    ]);
+    const m = new Map();
+    [ouvertes, recentes].forEach(sn => _docs(sn).forEach(d => m.set(d._id, d)));
+    _demandes = [...m.values()].sort((a,b)=>String(b.dateCreation||'').localeCompare(String(a.dateCreation||'')) || String(b._id).localeCompare(String(a._id)));
+    if(_demandes.some(d => d.lignes && d.lignes.some(l => !_dlEstArticle(l)))) await _produits();
+    majBadgeDemandes();
     renderDemandes();
-  }catch(e){ tb.innerHTML = '<tr><td class="emp">Lecture impossible</td></tr>'; notify(msgErreur(e),'err'); }
+  }catch(e){ document.getElementById('dm-liste').innerHTML = `<div class="alert alert-danger">${esc(msgErreur(e))}</div>`; }
+};
+function majBadgeDemandes(){
+  const b = document.getElementById('badge-demandes'); if(!b) return;
+  const n = _demandes.filter(d => d.statut === 'en_attente').length;
+  b.textContent = n; b.style.display = n ? '' : 'none';
+}
+window.renderDemandes = function(){
+  const actif = STK.traitementDemandes;
+  document.getElementById('dm-etat').innerHTML = actif
+    ? '✅ <b>Traitement activé</b> : « Traiter » enregistre la réponse dans TMMB <b>et</b> sort les articles du stock général vers l\'agence. Ne traitez plus les demandes dans TMMB.'
+    : `🔒 <b>Consultation seulement.</b> Les demandes se traitent encore dans TMMB. ${estAdmin() ? 'Vous pourrez activer le traitement ici dans <a href="#" onclick="go(\'reglages\');return false;">Réglages</a> quand le stock ne sera plus géré dans TMMB.' : "L'administrateur l'activera quand le stock ne sera plus géré dans TMMB."}`;
+  document.getElementById('dm-etat').className = 'alert ' + (actif ? 'alert-info' : 'alert-warn');
+  const st = document.getElementById('dm-statut').value, ag = document.getElementById('dm-agence').value;
+  const t = (document.getElementById('dm-search').value||'').trim().toLowerCase();
+  const liste = _demandes.filter(d => (!st || d.statut === st) && (!ag || d.agenceId === ag)
+    && (!t || (d.lignes||[]).some(l => String(_dlLib(l)).toLowerCase().includes(t)) || String(d.agenceNom||'').toLowerCase().includes(t)));
+  const cnt = s => _demandes.filter(d => d.statut === s).length;
+  document.getElementById('dm-kpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-lbl">En attente</div><div class="kpi-val kv-yellow">${cnt('en_attente')}</div></div>
+    <div class="kpi-card"><div class="kpi-lbl">Partielles</div><div class="kpi-val kv-red">${cnt('partielle')}</div></div>
+    <div class="kpi-card"><div class="kpi-lbl">Clôturées (période chargée)</div><div class="kpi-val kv-green">${cnt('cloturee')}</div></div>`;
+  const rows = liste.map(d => {
+    const id = sid(d._id);
+    const lignes = (d.lignes||[]).map(l => {
+      const ic = l.statutLigne === 'envoye' ? '✅' : l.statutLigne === 'indisponible' ? '⛔' : '⏳';
+      const det = l.statutLigne === 'envoye' ? `envoyé ${fmtN(l.qteEnvoyee)}/${fmtN(l.qteDemandee)}`
+        : l.statutLigne === 'indisponible' ? `indisponible${l.delaiDate ? ' jusqu\'au ' + dateFr(l.delaiDate) : ''}${l.recreee ? ' (redemandé)' : ''}` : `demandé ${fmtN(l.qteDemandee)}`;
+      const dispo = _dlEstArticle(l) && l.statutLigne !== 'envoye' ? ` <span class="muted">· stock général : ${fmtN(qte(GENERAL, l.articleId))}</span>` : '';
+      return `<div>${ic} ${esc(_dlLib(l))} — ${det}${dispo}</div>`;
+    }).join('');
+    const peutTraiter = actif && id && d.statut !== 'cloturee';
+    return `<tr><td>${dateFr(d.dateCreation)}</td><td>${lieuHtml(d.agenceId)}<div class="muted">${esc(d.chefAgenceNom||'')}</div></td>
+      <td style="font-size:12px;">${lignes}${d.note ? `<div class="muted" style="font-style:italic;">${esc(d.note)}</div>` : ''}${d.noteTraitement ? `<div style="margin-top:4px;">📝 ${esc(d.noteTraitement)}${d.traiteParNom ? ' — ' + esc(d.traiteParNom) : ''}</div>` : ''}</td>
+      <td><span class="tag tag-sm ${d.statut==='cloturee' ? 'tag-green' : d.statut==='partielle' ? 'tag-red' : 'tag-warn'}">${esc(STATUTS_DEMANDE[d.statut] || d.statut || '')}</span>${d.dateEnvoiPrevue ? `<div class="muted">envoi : ${dateFr(d.dateEnvoiPrevue)}</div>` : ''}</td>
+      <td class="no-print">${peutTraiter ? `<button class="btn btn-primary btn-xs" onclick="ouvrirTraitementDemande('${id}')">🚚 Traiter</button>` : ''}</td></tr>`;
+  });
+  document.getElementById('dm-liste').innerHTML = '<div class="tw"><table><thead><tr><th>Date</th><th>Agence</th><th>Articles demandés</th><th>Statut</th><th class="no-print"></th></tr></thead><tbody id="dm-body"></tbody></table></div>';
+  paginer('dm-body', rows, 5, 'Aucune demande pour ces filtres.');
 };
 
-function renderDemandes(){
-  document.getElementById('dm-info').innerHTML = STK.demandesActives
-    ? '✅ Le traitement des demandes est <b>activé</b> : valider une demande enregistre le dispatch depuis le stock général et la réponse est visible dans TMMB.'
-    : `⏸️ Le traitement des demandes est <b>désactivé</b> : consultation seulement. ${estAdmin() ? 'Activez-le dans Réglages quand le stock ne sera plus géré dans TMMB.' : "L'administrateur l'activera quand le stock ne sera plus géré dans TMMB."}`;
-  const st = document.getElementById('dm-statut').value, ag = document.getElementById('dm-agence').value;
-  const cnt = s => _demandes.filter(d=>d.statut===s).length;
-  document.getElementById('dm-kpi').innerHTML = Object.entries(DL_STATUTS).map(([k,v])=>`<div class="kpi-card"><div class="kpi-lbl">${v}</div><div class="kpi-val">${cnt(k)}</div></div>`).join('');
-  const rows = _demandes.filter(d => (!st || d.statut===st) && (!ag || d.agenceId===ag)).map(d => {
-    const lignes = (d.lignes||[]).map(l => {
-      const etat = l.statutLigne==='envoye' ? `envoyé ${fmtN(l.qteEnvoyee)}/${fmtN(l.qteDemandee)}`
-        : l.statutLigne==='indisponible' ? `indisponible jusqu'au ${esc(dateFr(l.delaiDate||''))}` : `demandé ${fmtN(l.qteDemandee)}`;
-      return `<div>${dlLib(l)} — <span class="muted">${etat}</span></div>`;
-    }).join('');
-    const btn = STK.demandesActives && d.statut !== 'cloturee'
-      ? `<button class="btn btn-primary btn-xs" onclick="ouvrirDemande('${esc(d._id)}')">🚚 Traiter</button>` : '';
-    return `<tr><td>${esc(dateFr(d.dateCreation||''))}</td><td>${esc(d.agenceNom || nomLieu(d.agenceId))}<div class="muted">${esc(d.chefAgenceNom||'')}</div></td>
-      <td>${lignes}${d.note ? `<div class="muted">📝 ${esc(d.note)}</div>` : ''}${d.noteTraitement ? `<div class="muted">↩️ ${esc(d.noteTraitement)}</div>` : ''}</td>
-      <td><b>${esc(DL_STATUTS[d.statut] || d.statut || '—')}</b>${d.traiteParNom ? `<div class="muted">${esc(d.traiteParNom)} · ${esc(dateFr(d.dateTraitement||''))}</div>` : ''}</td>
-      <td class="no-print">${btn}</td></tr>`;
-  });
-  paginer('dm-liste', rows, 5, 'Aucune demande');
-}
-window.renderDemandes = renderDemandes;
-
-// Articles physiques d'une ligne : l'article lui-même, ou la composition du produit.
-function articlesDeLigne(l, qty, produits){
-  if(dlEstArticle(l)) return [{ articleId:l.articleId, qty }];
-  const p = produits.get(l.produitId);
-  const comp = (p && Array.isArray(p.composition)) ? p.composition : [];
-  return comp.filter(c => c.articleId && Number(c.qte) > 0).map(c => ({ articleId:c.articleId, qty:Number(c.qte)*qty }));
+// Articles à sortir pour une ligne envoyée : l'article lui-même, ou la composition d'un produit.
+function articlesDeLigne(l, q){
+  if(_dlEstArticle(l)) return [{ articleId:l.articleId, qty:q }];
+  const p = IDX.produits && IDX.produits.get(l.produitId);
+  return ((p && p.composition) || []).map(c => ({ articleId:c.articleId, qty:(Number(c.qte)||0) * q })).filter(x => x.qty > 0);
 }
 
-let _dmCourante = null;
-window.ouvrirDemande = function(id){
-  if(!STK.demandesActives) return notify('Traitement désactivé','err');
-  const d = _demandes.find(x=>x._id===id); if(!d) return notify('Demande introuvable','err');
-  _dmCourante = d;
-  document.getElementById('md-titre').textContent = `🚚 Traiter — ${d.agenceNom || nomLieu(d.agenceId)}`;
+let _dmId = null;
+window.ouvrirTraitementDemande = function(id){
+  if(!STK.traitementDemandes) return notify("Le traitement des demandes n'est pas encore activé",'warn');
+  const d = _demandes.find(x => x._id === id); if(!d || d.statut === 'cloturee') return;
+  if(!IDX.agences.has(d.agenceId)) return notify("Agence de la demande introuvable",'err');
+  _dmId = id;
+  document.getElementById('md-titre').textContent = '🚚 Traiter la demande — ' + (d.agenceNom || nomLieu(d.agenceId));
+  document.getElementById('md-info').innerHTML = `Demandé par ${esc(d.chefAgenceNom||'')} le ${dateFr(d.dateCreation)}${d.note ? ` — « ${esc(d.note)} »` : ''}`;
   document.getElementById('md-date').value = aujourdhui();
   document.getElementById('md-note').value = d.noteTraitement || '';
-  document.getElementById('md-lignes').innerHTML = (d.lignes||[]).map((l,i) => {
-    if(l.statutLigne === 'envoye') return `<tr><td>${dlLib(l)}</td><td>${fmtN(l.qteDemandee)}</td><td colspan="2" class="muted">déjà envoyé : ${fmtN(l.qteEnvoyee)}</td></tr>`;
-    return `<tr><td>${dlLib(l)}</td><td>${fmtN(l.qteDemandee)}</td>
-      <td><input type="number" class="form-control" id="md-q-${i}" min="0" max="${l.qteDemandee}" step="1" value="${l.qteDemandee}" style="width:90px"></td>
-      <td><label><input type="checkbox" id="md-i-${i}" ${l.statutLigne==='indisponible'?'checked':''}> Indisponible</label>
-        <input type="number" class="form-control" id="md-j-${i}" min="1" step="1" value="${l.delaiJours||3}" style="width:70px" title="Délai en jours"> j</td></tr>`;
+  document.getElementById('md-lignes').innerHTML = (d.lignes||[]).map((l, i) => {
+    if(l.statutLigne === 'envoye') return `<tr><td>${esc(_dlLib(l))}</td><td colspan="3" class="muted">✅ déjà envoyé : ${fmtN(l.qteEnvoyee)} / ${fmtN(l.qteDemandee)}</td></tr>`;
+    const dispo = _dlEstArticle(l) ? qte(GENERAL, l.articleId) : null;
+    const defaut = dispo == null ? l.qteDemandee : Math.max(0, Math.min(l.qteDemandee, dispo));
+    return `<tr data-i="${i}"><td>${esc(_dlLib(l))}<div class="muted">demandé : ${fmtN(l.qteDemandee)}${dispo != null ? ` · stock général : ${fmtN(dispo)}` : ''}</div></td>
+      <td><input type="number" class="form-control md-qty" min="0" max="${Number(l.qteDemandee)||0}" step="1" value="${defaut}"></td>
+      <td><label class="chk-tout"><input type="checkbox" class="md-indispo" ${l.statutLigne==='indisponible' ? 'checked' : ''} onchange="this.closest('tr').querySelector('.md-delai').disabled=!this.checked"> Indisponible</label></td>
+      <td><input type="number" class="form-control md-delai" min="1" step="1" value="${Number(l.delaiJours)||3}" ${l.statutLigne==='indisponible' ? '' : 'disabled'} title="Délai en jours"></td></tr>`;
   }).join('');
   ouvrirModale('modal-demande');
 };
+window.confirmerTraitementDemande = () => avecVerrou('demande', 'btn-md', async () => {
+  const d0 = _demandes.find(x => x._id === _dmId); if(!d0) return;
+  const date = document.getElementById('md-date').value, note = document.getElementById('md-note').value.trim();
+  if(!dateValide(date)) return notify("Date d'envoi invalide (pas de date future)",'err');
+  // Lecture du formulaire (mêmes règles que TMMB).
+  const choix = new Map();
+  for(const tr of document.querySelectorAll('#md-lignes tr[data-i]')){
+    const i = Number(tr.dataset.i), l = d0.lignes[i];
+    const indispo = tr.querySelector('.md-indispo').checked;
+    const q = tr.querySelector('.md-qty').value;
+    if(indispo){
+      const dj = Math.max(1, parseInt(tr.querySelector('.md-delai').value) || 3);
+      choix.set(i, { indispo:true, delaiJours:dj });
+    } else {
+      if(!compteValide(q) || Number(q) > Number(l.qteDemandee)) return notify(`Quantité invalide pour « ${_dlLib(l)} » (0 à ${l.qteDemandee})`,'err');
+      choix.set(i, { indispo:false, qty:Number(q) });
+    }
+  }
+  if(_demandes.length && d0.lignes.some(l => !_dlEstArticle(l))) await _produits();
+  // Articles à sortir du stock général.
+  const sorties = new Map();
+  for(const [i, c] of choix) if(!c.indispo && c.qty > 0)
+    for(const x of articlesDeLigne(d0.lignes[i], c.qty)) sorties.set(x.articleId, (sorties.get(x.articleId)||0) + x.qty);
+  const inconnus = [...sorties.keys()].filter(a => !IDX.articles.has(a));
+  if(inconnus.length) return notify('Article inconnu dans la demande : impossible de sortir le stock','err');
+  const manque = [...sorties].filter(([a, q]) => q > qte(GENERAL, a));
+  if(manque.length) return notify('Stock général insuffisant : ' + manque.map(([a,q]) => `${nomArt(a)} (demandé ${fmtN(q)}, disponible ${fmtN(qte(GENERAL,a))})`).join(', '),'err');
+  const resume = sorties.size ? `${sorties.size} article(s) sortiront du stock général vers ${nomLieu(d0.agenceId)}.` : 'Aucun article ne sort du stock.';
+  if(!confirm(`Valider le traitement de la demande de ${d0.agenceNom || nomLieu(d0.agenceId)} ?\n\n${resume}\nLa réponse sera visible dans TMMB.`)) return;
 
-window.validerDemande = () => avecVerrou('demande', 'btn-md-valider', async () => {
-  const d = _dmCourante; if(!d || !STK.demandesActives) return;
-  const date = document.getElementById('md-date').value;
-  const noteTraitement = document.getElementById('md-note').value.trim().slice(0,300);
-  if(!estLieu(d.agenceId) || d.agenceId === GENERAL) return notify("Agence de la demande inconnue dans TMMB",'err');
-  let produits = new Map();
-  if((d.lignes||[]).some(l => !dlEstArticle(l))) produits = await _produits();
-  const nouvelles = [], aSortir = [];
+  const ref = doc(db,'demandesLivraison',d0._id);
+  const agence = d0.agenceId, groupe = doc(collection(db,'stk_mouvements')).id;
   try{
-    if(!dateValide(date)) throw new Error("Date d'envoi invalide (pas de date future)");
-    (d.lignes||[]).forEach((l,i) => {
-      if(l.statutLigne === 'envoye'){ nouvelles.push(l); return; }
-      if(document.getElementById('md-i-'+i).checked){
-        const j = Math.max(1, parseInt(document.getElementById('md-j-'+i).value) || 3);
-        const dd = new Date(Date.now() + j*86400000).toISOString().split('T')[0];
-        nouvelles.push({ ...l, statutLigne:'indisponible', qteEnvoyee:0, delaiJours:j, delaiDate:dd, recreee:false });
-        return;
-      }
-      const v = document.getElementById('md-q-'+i).value;
-      if(!/^\d+$/.test(v) || Number(v) > Number(l.qteDemandee)) throw new Error('Quantité invalide (entre 0 et la quantité demandée)');
-      const q = Number(v);
-      const arts = articlesDeLigne(l, q, produits);
-      if(q > 0 && !arts.length) throw new Error(`Composition inconnue pour le produit « ${l.produitNom||''} »`);
-      arts.forEach(a => { if(!IDX.articles.has(a.articleId)) throw new Error('Article inconnu dans une composition'); aSortir.push(a); });
-      nouvelles.push({ ...l, statutLigne:'envoye', qteEnvoyee:q, delaiJours:0, delaiDate:'' });
-    });
-  }catch(e){ return notify(e.message,'err'); }
-  const parArt = new Map(); aSortir.forEach(a => parArt.set(a.articleId, (parArt.get(a.articleId)||0) + a.qty));
-  const statut = nouvelles.every(l => l.statutLigne === 'envoye') ? 'cloturee' : 'partielle';
-  const resume = [...parArt].map(([a,q]) => `• ${nomArt(a)} : ${fmtN(q)}`).join('\n') || '(aucun article envoyé)';
-  if(!confirm(`Valider la demande de ${d.agenceNom || nomLieu(d.agenceId)} ?\n\nSortie du stock général :\n${resume}\n\nStatut dans TMMB : ${DL_STATUTS[statut]}`)) return;
-  const avant = JSON.stringify(d.lignes || []);
-  const groupe = doc(collection(db,'stk_mouvements')).id;
-  try{
-    await runTransaction(db, async (tx) => {
-      const ref = doc(db,'demandesLivraison',d._id);
+    const res = await runTransaction(db, async (tx) => {
       const s = await tx.get(ref);
-      if(!s.exists()) throw new Error('Demande supprimée entre-temps');
-      if(s.data().statut === 'cloturee' || JSON.stringify(s.data().lignes || []) !== avant) throw new Error('Demande modifiée par quelqu\'un d\'autre : rechargez la page');
-      const stocks = [];
-      for(const [a] of parArt) stocks.push([a, await tx.get(doc(db,'stk_stock',cleStock(GENERAL,a)))]);
-      const manque = stocks.filter(([a,s2]) => (Number(s2.exists() ? s2.data().qty : 0) || 0) < parArt.get(a));
-      if(manque.length) throw new Error('Stock général insuffisant : ' + manque.map(([a,s2]) => `${nomArt(a)} (disponible ${fmtN(s2.exists() ? s2.data().qty : 0)})`).join(', '));
-      for(const [a,q] of parArt){
-        tx.set(doc(db,'stk_stock',cleStock(GENERAL,a)), { agenceId:GENERAL, articleId:a, qty:increment(-q), majLe:serverTimestamp() }, { merge:true });
-        tx.set(doc(db,'stk_stock',cleStock(d.agenceId,a)), { agenceId:d.agenceId, articleId:a, qty:increment(q), majLe:serverTimestamp() }, { merge:true });
-        tx.set(doc(collection(db,'stk_mouvements')), { type:'transfert', articleId:a, agenceId:GENERAL, agenceDestId:d.agenceId, qty:q, date,
-          note:('Demande de ' + (d.agenceNom||'') + ' du ' + (d.dateCreation||'')).slice(0,200), groupeId:groupe, demandeId:d._id, ts:serverTimestamp(), ...auteur() });
+      if(!s.exists()) throw new Error('Demande introuvable (supprimée dans TMMB ?)');
+      const d = s.data();
+      if(d.statut === 'cloturee') throw new Error('Cette demande est déjà clôturée');
+      // La demande ne doit pas avoir changé entre l'ouverture et la validation.
+      if(JSON.stringify((d.lignes||[]).map(l => [l.statutLigne, l.qteEnvoyee])) !== JSON.stringify((d0.lignes||[]).map(l => [l.statutLigne, l.qteEnvoyee])))
+        throw new Error('La demande a été modifiée entre-temps : rechargez la page');
+      const arts = [...sorties.keys()];
+      const snaps = await Promise.all(arts.map(a => tx.get(doc(db,'stk_stock',cleStock(GENERAL,a)))));
+      arts.forEach((a, j) => {
+        const dispo = snaps[j].exists() ? (Number(snaps[j].data().qty)||0) : 0;
+        if(sorties.get(a) > dispo) throw new Error(`Stock général insuffisant pour « ${nomArt(a)} » (disponible ${fmtN(dispo)})`);
+      });
+      const nouvelles = (d.lignes||[]).map((l, i) => {
+        if(l.statutLigne === 'envoye') return l;
+        const c = choix.get(i); if(!c) return l;
+        if(c.indispo){
+          const delaiDate = new Date(Date.now() + c.delaiJours*86400000).toISOString().split('T')[0];
+          return { ...l, statutLigne:'indisponible', qteEnvoyee:0, delaiJours:c.delaiJours, delaiDate, recreee:false };
+        }
+        return { ...l, statutLigne:'envoye', qteEnvoyee:c.qty, delaiJours:0, delaiDate:'' };
+      });
+      const statut = nouvelles.every(l => l.statutLigne === 'envoye') ? 'cloturee' : 'partielle';
+      const deltas = [];
+      for(const [a, q] of sorties){
+        deltas.push({ lieu:GENERAL, articleId:a, delta:-q }, { lieu:agence, articleId:a, delta:q });
+        tx.set(doc(collection(db,'stk_mouvements')), { type:'transfert', articleId:a, agenceId:GENERAL, agenceDestId:agence, qty:q, date,
+          note:`Demande de ${String(d.agenceNom||'').slice(0,60)} du ${dateFr(d.dateCreation)}`.slice(0,200), demandeId:d0._id, groupeId:groupe, ts:serverTimestamp(), ...auteur() });
       }
-      tx.update(ref, { lignes:nouvelles, statut, dateEnvoiPrevue: parArt.size ? date : (s.data().dateEnvoiPrevue || ''), dateTraitement:aujourdhui(),
-        traiteParId:user().id || '', traiteParNom:user().name || '', noteTraitement });
+      const ds = cumul(deltas);
+      ds.forEach(x => ecrireStock(tx, x));
+      const maj = { lignes:nouvelles, statut, dateEnvoiPrevue:sorties.size ? date : (d.dateEnvoiPrevue || ''), dateTraitement:aujourdhui(),
+        traiteParId:user().id||'', traiteParNom:user().name||'', noteTraitement:note.slice(0,500), _ts:serverTimestamp(),
+        stkDispatchs:[...(Array.isArray(d.stkDispatchs) ? d.stkDispatchs : []), ...(sorties.size ? [groupe] : [])] };
+      tx.update(ref, maj);
+      return { ds, maj };
     });
-    for(const [a,q] of parArt){ STK.stock.set(cleStock(GENERAL,a), qte(GENERAL,a) - q); STK.stock.set(cleStock(d.agenceId,a), qte(d.agenceId,a) + q); }
-    fermerModale('modal-demande'); notify('✅ Demande traitée — réponse visible dans TMMB');
-    chargerDemandes();
-  }catch(e){ notify(e.message && !e.code ? e.message : msgErreur(e),'err'); }
+    appliquerLocal(res.ds);
+    Object.assign(d0, res.maj, { _ts:null });
+    fermerModale('modal-demande');
+    majBadgeDemandes(); renderDemandes();
+    notify(`✅ Demande ${res.maj.statut === 'cloturee' ? 'clôturée' : 'traitée (partielle)'} — réponse visible dans TMMB`);
+  }catch(e){ notify(msgErreur(e),'err'); }
 });
 
-function majReglageDemandes(){
-  const el = document.getElementById('rg-demandes-etat');
-  if(el) el.innerHTML = STK.demandesActives ? '✅ <b>Activé</b>' : '⏸️ <b>Désactivé</b>';
-  const b = document.getElementById('rg-demandes-btn');
-  if(b) b.textContent = STK.demandesActives ? '⏸️ Désactiver' : '▶️ Activer';
-}
-window.basculerDemandes = async function(){
+// Réglage admin : activer / désactiver le traitement des demandes ici.
+window.basculerTraitementDemandes = async function(){
   if(!estAdmin()) return notify("Réservé à l'administrateur",'err');
-  const activer = !STK.demandesActives;
-  if(!confirm(activer
-    ? "Activer le traitement des demandes dans l'application de stock ?\n\nÀ faire seulement quand le stock n'est plus géré dans TMMB. Ne traitez plus les demandes dans TMMB, sinon le stock ne bougera pas ici."
-    : 'Désactiver le traitement des demandes ?')) return;
+  const v = !STK.traitementDemandes;
+  const msg = v
+    ? "Activer le traitement des demandes dans l'application de stock ?\n\nÀ partir de maintenant, traitez les demandes ICI et plus dans TMMB : une demande traitée dans TMMB ne fait pas bouger ce stock."
+    : "Désactiver le traitement des demandes ? La page redevient consultable seulement.";
+  if(!confirm(msg)) return;
   try{
-    await setDoc(doc(db,'stk_config','reglages'), { demandesActives:activer, majLe:serverTimestamp(), majPar:user().name||'' }, { merge:true });
-    STK.demandesActives = activer; majReglageDemandes(); notify(activer ? '✅ Traitement activé' : '⏸️ Traitement désactivé');
+    await setDoc(doc(db,'stk_config','reglages'), { traitementDemandes:v, traitementDemandesLe:serverTimestamp(), traitementDemandesPar:user().name||'' }, { merge:true });
+    STK.traitementDemandes = v; renderReglages();
+    notify(v ? '✅ Traitement des demandes activé' : 'Traitement des demandes désactivé');
   }catch(e){ notify(msgErreur(e),'err'); }
 };
+function renderReglages(){
+  document.getElementById('rg-jourj').value = STK.jourJ || '';
+  const b = document.getElementById('rg-demandes-btn'), e = document.getElementById('rg-demandes-etat');
+  e.innerHTML = STK.traitementDemandes ? '<span class="tag tag-green">✅ Activé</span>' : '<span class="tag tag-warn">🔒 Désactivé (consultation seulement)</span>';
+  b.textContent = STK.traitementDemandes ? 'Désactiver' : 'Activer';
+  b.className = 'btn ' + (STK.traitementDemandes ? 'btn-ghost' : 'btn-primary');
+}

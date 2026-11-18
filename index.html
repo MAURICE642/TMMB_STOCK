@@ -71,8 +71,8 @@
       <div class="nav-items">
         <div class="nav-item" id="nav-general" onclick="go('general')">🏭 État du stock général</div>
         <div class="nav-item" id="nav-entrees" onclick="go('entrees')">📥 Entrées fournisseurs</div>
+        <div class="nav-item" id="nav-demandes" onclick="go('demandes')">📨 Demandes des agences <span class="badge" id="badge-demandes" style="display:none;"></span></div>
         <div class="nav-item" id="nav-dispatch" onclick="go('dispatch')">🚚 Dispatch vers agences</div>
-        <div class="nav-item" id="nav-demandes" onclick="go('demandes')">📨 Demandes des agences</div>
         <div class="nav-item" id="nav-sorties" onclick="go('sorties')">📤 Autres sorties</div>
       </div>
     </div>
@@ -161,6 +161,23 @@
       <div class="page" id="page-sorties"><div data-op="sortie"></div></div>
       <div class="page" id="page-transferts"><div data-op="transfert"></div></div>
 
+      <!-- ════════ DEMANDES DES AGENCES (TMMB) ════════ -->
+      <div class="page" id="page-demandes">
+        <div class="alert" id="dm-etat"></div>
+        <div class="filters">
+          <select class="form-control f-sm" id="dm-statut" onchange="renderDemandes()">
+            <option value="">Tous les statuts</option><option value="en_attente">⏳ En attente</option><option value="partielle">⚠️ Partielles</option><option value="cloturee">✅ Clôturées</option>
+          </select>
+          <select class="form-control f-sm f-agence" id="dm-agence" onchange="renderDemandes()"></select>
+          <input type="text" class="form-control f-sm" id="dm-search" placeholder="🔍 Article ou agence…" oninput="renderDemandes()">
+          <span class="date-range"><label>Clôturées depuis le</label><input type="date" class="form-control f-sm" id="dm-depuis" onchange="chargerDemandes()"></span>
+          <button class="btn btn-ghost btn-sm no-print" onclick="chargerDemandes()">🔄 Recharger</button>
+        </div>
+        <div class="muted" style="margin-bottom:8px;">Les demandes ouvertes (en attente, partielles) sont toujours affichées ; les demandes clôturées le sont depuis la date choisie.</div>
+        <div class="kpi-row kpi-3" id="dm-kpi"></div>
+        <div id="dm-liste"></div>
+      </div>
+
       <!-- ════════ STOCK PAR AGENCE ════════ -->
       <div class="page" id="page-agences">
         <div class="filters">
@@ -219,7 +236,7 @@
           <div class="filters">
             <select class="form-control f-sm f-lieu" id="inv-f-lieu" onchange="renderInventaires()"></select>
             <select class="form-control f-sm" id="inv-f-type" onchange="renderInventaires()"><option value="">Tous les types</option><option value="depart">Départ</option><option value="periodique">Périodique</option></select>
-            <select class="form-control f-sm" id="inv-f-statut" onchange="renderInventaires()"><option value="">Tous les statuts</option><option value="encours">Brouillons</option><option value="valide">Validés</option></select>
+            <select class="form-control f-sm" id="inv-f-statut" onchange="renderInventaires()"><option value="">Tous les statuts</option><option value="encours">En cours</option><option value="valide">Validés</option><option value="annule">Annulés</option></select>
             <span class="date-range"><label>Du</label><input type="date" class="form-control f-sm" id="inv-f-du" onchange="renderInventaires()"><label>au</label><input type="date" class="form-control f-sm" id="inv-f-au" onchange="renderInventaires()"></span>
           </div>
           <div class="tw"><table>
@@ -246,6 +263,7 @@
             <tbody id="inv-lignes"></tbody>
           </table></div>
           <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;" class="no-print" id="inv-actions">
+            <button class="btn btn-danger" id="btn-inv-annuler" style="display:none;" onclick="ouvrirAnnulationInventaire(_invOuvertId())">🚫 Annuler l'inventaire</button>
             <button class="btn btn-ghost" onclick="enregistrerBrouillon()">💾 Enregistrer le brouillon</button>
             <button class="btn btn-success" id="btn-inv-valider" onclick="validerInventaire()">✅ Valider l'inventaire</button>
           </div>
@@ -345,23 +363,6 @@
         </details>
       </div>
 
-      <!-- ════════ v4 : DEMANDES DES AGENCES ════════ -->
-      <div class="page" id="page-demandes">
-        <div class="sec-hdr">
-          <div class="sec-title">Demandes de produits des agences (TMMB)</div>
-          <button class="btn btn-primary btn-sm no-print" onclick="chargerDemandes()">🔄 Actualiser</button>
-        </div>
-        <div class="alert alert-info" id="dm-info"></div>
-        <div class="kpi-row kpi-3" id="dm-kpi" style="grid-template-columns:repeat(3,1fr);"></div>
-        <div class="card">
-          <div class="filters">
-            <select class="form-control f-sm" id="dm-statut" onchange="renderDemandes()"><option value="">Tous les statuts</option><option value="en_attente" selected>En attente</option><option value="partielle">Partielle</option><option value="cloturee">Clôturée</option></select>
-            <select class="form-control f-sm f-agence" id="dm-agence" onchange="renderDemandes()"></select>
-          </div>
-          <div class="tw"><table><thead><tr><th>Date</th><th>Agence</th><th>Articles</th><th>Statut</th><th class="no-print"></th></tr></thead><tbody id="dm-liste"></tbody></table></div>
-        </div>
-      </div>
-
       <!-- ════════ RÉGLAGES (admin) ════════ -->
       <div class="page" id="page-reglages">
         <div class="card">
@@ -375,25 +376,12 @@
         </div>
         <div class="card">
           <div class="card-title">📨 Traitement des demandes des agences</div>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Quand c'est activé, le gestionnaire traite ici les demandes faites dans TMMB : le dispatch est enregistré et la réponse s'affiche dans TMMB. À activer seulement quand le stock n'est plus géré dans TMMB.</p>
-          <div style="display:flex;gap:12px;align-items:center;"><span id="rg-demandes-etat"></span><button class="btn btn-primary" id="rg-demandes-btn" onclick="basculerDemandes()">▶️ Activer</button></div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Désactivé : les demandes faites dans TMMB sont seulement <b>consultables</b> ici et se traitent dans TMMB. Activé : on les traite <b>ici</b> ; la réponse s'affiche dans TMMB et les articles envoyés sortent du stock général vers l'agence. Activez-le le jour où le stock n'est plus géré dans TMMB, et arrêtez alors de traiter les demandes dans TMMB.</p>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;"><span id="rg-demandes-etat"></span><button class="btn btn-primary" id="rg-demandes-btn" onclick="basculerTraitementDemandes()">Activer</button></div>
         </div>
       </div>
 
     </div>
-  </div>
-</div>
-
-<!-- ═══════════ v4 : MODALE TRAITEMENT D'UNE DEMANDE ═══════════ -->
-<div class="mo hidden" id="modal-demande">
-  <div class="md">
-    <div class="mh"><div class="md-title" id="md-titre">Traiter</div><button class="close-btn" onclick="fermerModale('modal-demande')">✕</button></div>
-    <div class="mb">
-      <div class="form-group"><div class="form-label">Date d'envoi *</div><input type="date" class="form-control" id="md-date"></div>
-      <div class="tw"><table class="lignes"><thead><tr><th>Article</th><th>Demandé</th><th>Envoyé</th><th>Indisponible / délai</th></tr></thead><tbody id="md-lignes"></tbody></table></div>
-      <div class="form-group"><div class="form-label">Note pour le chef d'agence (visible dans TMMB)</div><input type="text" class="form-control" id="md-note" maxlength="300"></div>
-    </div>
-    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-demande')">Annuler</button><button class="btn btn-success" id="btn-md-valider" onclick="validerDemande()">✅ Valider</button></div>
   </div>
 </div>
 
@@ -458,6 +446,34 @@
       <div id="mp-histo" style="font-size:11px;color:var(--muted);"></div>
     </div>
     <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-prix')">Fermer</button><button class="btn btn-primary" id="btn-mp" onclick="enregistrerCorrectionPrix()">💾 Corriger le prix</button></div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALE TRAITEMENT D'UNE DEMANDE ═══════════ -->
+<div class="mo hidden" id="modal-demande">
+  <div class="md" style="max-width:760px;">
+    <div class="mh"><div class="md-title" id="md-titre">🚚 Traiter la demande</div><button class="close-btn" onclick="fermerModale('modal-demande')">✕</button></div>
+    <div class="mb">
+      <div id="md-info" class="muted" style="margin-bottom:12px;"></div>
+      <div class="form-group"><div class="form-label">Date d'envoi effective *</div><input type="date" class="form-control" id="md-date" style="max-width:200px;"></div>
+      <table class="lignes"><thead><tr><th>Article</th><th>Qté envoyée</th><th></th><th>Délai (jours)</th></tr></thead><tbody id="md-lignes"></tbody></table>
+      <div class="form-group" style="margin-top:12px;"><div class="form-label">Note pour le chef d'agence (facultative)</div><input type="text" class="form-control" id="md-note" maxlength="500" placeholder="Ex. : article X en rupture, arrivage prévu la semaine prochaine…"></div>
+      <div class="muted">Les quantités envoyées sortent du stock général vers l'agence. Une ligne « indisponible » sera redemandée automatiquement par TMMB après le délai.</div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-demande')">Fermer</button><button class="btn btn-success" id="btn-md" onclick="confirmerTraitementDemande()">✅ Valider le traitement</button></div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALE ANNULATION D'UN INVENTAIRE (admin) ═══════════ -->
+<div class="mo hidden" id="modal-annul-inv">
+  <div class="md">
+    <div class="mh"><div class="md-title">🚫 Annuler l'inventaire</div><button class="close-btn" onclick="fermerModale('modal-annul-inv')">✕</button></div>
+    <div class="mb">
+      <div id="mi-info" style="font-size:13px;margin-bottom:12px;line-height:1.7;"></div>
+      <div class="alert alert-info">Le stock ne change pas (un brouillon ne l'a jamais modifié). L'inventaire reste dans la liste avec le statut « Annulé », votre nom et le motif. Vous pourrez ensuite recommencer un inventaire neuf pour ce lieu.</div>
+      <div class="form-group"><div class="form-label">Motif *</div><input type="text" class="form-control" id="mi-motif" maxlength="200" placeholder="Ex. : comptage à refaire, mauvais lieu choisi…"></div>
+    </div>
+    <div class="ma"><button class="btn btn-ghost" onclick="fermerModale('modal-annul-inv')">Fermer</button><button class="btn btn-danger" id="btn-mi" onclick="confirmerAnnulationInventaire()">🚫 Annuler l'inventaire</button></div>
   </div>
 </div>
 
